@@ -215,4 +215,43 @@
 
 </div></div></div>
 <script>(function(){var fin=document.querySelector('.fitin'),fw=document.querySelector('.fitwrap');function fit(){var s=Math.min(1,fw.clientWidth/780);fin.style.transform='scale('+s+')';fw.style.height=(fin.offsetHeight*s)+'px';}window.addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(fin);document.addEventListener('DOMContentLoaded',fit);window.addEventListener('load',fit);fit();})();</script>
+<style>
+/* ===== gate ===== */
+body.locked>*:not(#gate){display:none !important}
+#gate{display:none;position:fixed;inset:0;z-index:999;background:#0b0c0f;color:#f1efe9;font-family:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;align-items:center;justify-content:center;padding:24px}
+body.locked #gate{display:flex}
+#gate .box{width:min(400px,100%);background:#15171c;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:34px 30px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#gate .b{font-size:15px;letter-spacing:.24em;font-weight:700}
+#gate .b span{display:block;font-size:11px;color:#9d9b93;letter-spacing:.1em;margin-top:4px;font-weight:500}
+#gate h2{font-size:19px;margin:22px 0 6px;font-weight:700}
+#gate p{margin:0 0 20px;font-size:13px;color:#9d9b93;line-height:1.5}
+#gate input{width:100%;padding:13px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0e0f12;color:#fff;font-size:16px;text-align:center;letter-spacing:.2em;outline:none}
+#gate input:focus{border-color:#cbb08a}
+#gate button{margin-top:12px;width:100%;padding:13px;border-radius:10px;border:0;background:#cbb08a;color:#15130f;font-weight:700;font-size:14.5px;cursor:pointer}
+#gate .err{color:#e08b7a;font-size:12.5px;margin-top:10px;min-height:16px}
+@media print{#gate{display:none !important}}
+</style>
+<div id="gate"><div class="box">
+  <div class="b">ZEEKR 7X<span>DEALER ONLY</span></div>
+  <h2>딜러 전용 자료입니다</h2>
+  <p>전달받은 입장 비밀번호를 입력해 주세요.</p>
+  <form id="gateForm"><input id="gatePw" type="password" autocomplete="off" placeholder="비밀번호"><button type="submit">입장</button><div class="err" id="gateErr"></div></form>
+</div></div>
+
+<script>
+(function(){
+  var H='49e57a4d4b13ea9e174d16ad9326fbaf24e2d1cfb5dc90e6e13469c42025d09d', KEY='z7x_gate', DAYS=30;
+  if(location.protocol==='file:') return;
+  try{var v=JSON.parse(localStorage.getItem(KEY)||'null'); if(v&&v.h===H&&Date.now()-v.t<DAYS*864e5) return;}catch(e){}
+  document.body.classList.add('locked');
+  async function sha(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('');}
+  var f=document.getElementById('gateForm'),i=document.getElementById('gatePw'),e=document.getElementById('gateErr');
+  f.addEventListener('submit',async function(ev){ev.preventDefault();
+    if(await sha(i.value.trim())===H){try{localStorage.setItem(KEY,JSON.stringify({h:H,t:Date.now()}))}catch(x){} document.body.classList.remove('locked');}
+    else{e.textContent='비밀번호가 맞지 않습니다.'; i.select();}
+  });
+  setTimeout(function(){i.focus()},50);
+})();
+</script>
+
 </body></html>
