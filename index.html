@@ -51,8 +51,11 @@ h1 small{display:block;font-size:15px;color:var(--mut);font-weight:400;margin-to
 .spot{position:absolute;transform:translate(-50%,-50%);z-index:3;width:30px;height:30px;border-radius:50%;border:1.5px solid #fff;padding:0;background:var(--ink);color:#fff;font-family:var(--disp);font-weight:600;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.35);transition:transform .12s,background .12s}
 .spot.sub{width:22px;height:22px;font-size:11px;opacity:.85}
 .spot:hover,.spot.on{transform:translate(-50%,-50%) scale(1.12);background:var(--acc)}
-.spot .lbl{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);white-space:nowrap;font-family:"Pretendard Variable",Pretendard,sans-serif;font-size:12.5px;font-weight:600;color:#fff;background:var(--ink);padding:5px 10px;border-radius:var(--r);opacity:0;pointer-events:none;transition:.12s}
-.spot.flip .lbl{left:auto;right:calc(100% + 10px)}
+.spot .lbl{position:absolute;white-space:nowrap;font-family:"Pretendard Variable",Pretendard,sans-serif;font-size:12.5px;font-weight:600;color:#fff;background:var(--ink);padding:5px 10px;border-radius:var(--r);opacity:0;pointer-events:none;transition:.12s;line-height:1.3}
+.spot.d-r .lbl{left:calc(100% + 8px);top:50%;transform:translateY(-50%)}
+.spot.d-l .lbl{right:calc(100% + 8px);top:50%;transform:translateY(-50%)}
+.spot.d-t .lbl{bottom:calc(100% + 8px);left:50%;transform:translateX(-50%)}
+.spot.d-b .lbl{top:calc(100% + 8px);left:50%;transform:translateX(-50%)}
 .canvas.labels .spot:not(.sub) .lbl,.spot:hover .lbl,.spot.on .lbl{opacity:1}
 
 /* hover card */
@@ -341,7 +344,7 @@ body.locked #gate{display:flex}
 <script>
 const PRODUCTS = [
  {id:1,name:'강화유리 보호필름 1+1 세트',sub:'16″ 메인 디스플레이 + 13.02″ 디지털 클러스터',zone:'디스플레이',status:'ready',
-  spots:[{x:50,y:46.5},{x:29,y:39.5}],
+  short:'강화유리 필름 1+1',spots:[{x:50,y:46.5,d:'t'},{x:29,y:39.5}],
   imgs:['assets/01_screen/01.jpg','assets/01_screen/02.jpg','assets/01_screen/03.jpg','assets/01_screen/04.jpg','assets/01_screen/05.jpg'],
   opts:[{n:'16″ + 13.02″ 세트',img:'assets/01_screen/02.jpg'}],
   tags:['9H 강화유리','0.33mm','2026 전용'],
@@ -349,7 +352,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X 2026년형 (국내 사양)'],['규격','16″ 메인 디스플레이 + 13.02″ 디지털 클러스터'],['소재','강화유리 (경도 9H)'],['두께','0.33mm'],['코팅','저반사(AG) · 올레포빅'],['구성','필름 2장 + 설치 키트'],['공급가','별도 견적']],
   detail:'detail/01_screen.html'},
  {id:2,name:'3D 가죽 스마트키 케이스',sub:'천연 스웨이드 양가죽 · 순정 키 전용 성형',zone:'스마트키',status:'ready',
-  spots:[{x:49.7,y:76}],
+  short:'가죽 키케이스',spots:[{x:49.7,y:76,d:'r'}],
   imgs:['assets/02_keycase_leather/01.jpg','assets/02_keycase_leather/02.jpg','assets/02_keycase_leather/03.jpg','assets/02_keycase_leather/04.jpg','assets/02_keycase_leather/05.jpg','assets/02_keycase_leather/06.jpg'],
   opts:[{n:'그레이',img:'assets/02_keycase_leather/sku1.jpg'},{n:'브라운',img:'assets/02_keycase_leather/sku2.jpg'},{n:'올리브 그린',img:'assets/02_keycase_leather/sku3.jpg'}],
   tags:['천연 스웨이드','3색','키링 포함'],
@@ -357,7 +360,7 @@ const PRODUCTS = [
   specs:[['호환','지커 7X 링 고리형(Type C) 스마트키'],['소재','천연 스웨이드 양가죽 + 내부 기모'],['색상','그레이 · 브라운 · 올리브 그린'],['구성','키케이스 1개 + 키링'],['공급가','별도 견적']],
   detail:'detail/02_keycase.html'},
  {id:3,name:'오토도어 스위치 알칸타라 커버',sub:'이탈리아 스웨이드 · 4도어 세트 (8피스)',zone:'도어 스위치',status:'ready',
-  spots:[{x:8.2,y:74.7},{x:91.8,y:74.7}],
+  short:'도어 스위치 알칸타라',spots:[{x:8.2,y:74.7},{x:91.8,y:74.7}],
   imgs:['assets/03_doorswitch/01.jpg','assets/03_doorswitch/02.jpg','assets/03_doorswitch/03.jpg','assets/03_doorswitch/04.jpg','assets/03_doorswitch/05.jpg','assets/03_doorswitch/06.jpg','assets/03_doorswitch/07.jpg'],
   opts:[{n:'오렌지',img:'assets/03_doorswitch/04.jpg'},{n:'그레이',img:'assets/03_doorswitch/05.jpg'},{n:'퍼플',img:'assets/03_doorswitch/06.jpg'},{n:'진그레이',img:'assets/03_doorswitch/07.jpg'}],
   tags:['스웨이드','4도어 8pcs','4색'],
@@ -365,7 +368,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X 2026년형'],['소재','이탈리아 스웨이드 (알칸타라 스타일)'],['구성','4세트 8피스 (문 4개분)'],['색상','오렌지 · 그레이 · 퍼플 · 진그레이'],['부착','접착식'],['공급가','별도 견적']],
   detail:'detail/03_doorswitch.html'},
  {id:4,name:'센터 콘솔 실리콘 컵홀더',sub:'2026형 컵홀더 형상 1:1 · 논슬립 · 물세척',zone:'센터 콘솔',status:'src',
-  spots:[{x:49.7,y:66.5}],
+  short:'실리콘 컵홀더',spots:[{x:49.7,y:66.5,d:'r'}],
   imgs:['assets/04_cupholder/02.jpg','assets/04_cupholder/04.jpg','assets/04_cupholder/05.jpg','assets/04_cupholder/06.jpg'],
   opts:[{n:'그레이',img:'assets/04_cupholder/07.jpg'},{n:'블랙',img:'assets/04_cupholder/10.jpg'},{n:'화이트',img:'assets/04_cupholder/09.jpg'},{n:'오렌지',img:'assets/04_cupholder/12.jpg'},{n:'딥 퍼플',img:'assets/04_cupholder/13.jpg'}],
   tags:['실리콘','5색','2026 전용'],
@@ -373,7 +376,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X 2026년형'],['소재','실리콘'],['색상','그레이 · 블랙 · 화이트 · 오렌지 · 딥 퍼플'],['구성','1pcs'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005011862053326.html'},
  {id:5,name:'TPU 스마트키 케이스',sub:'소프트 TPU · 실버 링 키체인 세트 · 엔트리 옵션',zone:'스마트키',status:'src',
-  spots:[{x:49.7,y:85}],
+  short:'TPU 키케이스',spots:[{x:49.7,y:85,d:'b'}],
   imgs:['assets/05_keycase_tpu/02.jpg','assets/05_keycase_tpu/01.jpg','assets/05_keycase_tpu/03.jpg','assets/05_keycase_tpu/04.jpg','assets/05_keycase_tpu/05.jpg','assets/05_keycase_tpu/07.jpg'],
   opts:[{n:'화이트',img:'assets/05_keycase_tpu/02.jpg'},{n:'퍼플',img:'assets/05_keycase_tpu/03.jpg'},{n:'블랙',img:'assets/05_keycase_tpu/08.jpg'}],
   tags:['소프트 TPU','3색','가성비'],
@@ -381,7 +384,7 @@ const PRODUCTS = [
   specs:[['호환','지커 7X 스마트키 (지커 공용 키 규격)'],['소재','소프트 TPU'],['색상','화이트 · 퍼플 · 블랙'],['구성','케이스 1개 (+ 실버 링 키체인 옵션)'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005012596143915.html'},
  {id:6,name:'센터 콘솔 하단 수납 트레이',sub:'플로팅 콘솔 아래 공간 전용 TPE 정리함',zone:'콘솔 하단',status:'src',
-  spots:[{x:43,y:80}],
+  short:'콘솔 하단 트레이',spots:[{x:43,y:80,d:'l'}],
   imgs:['assets/06_console_tray/07.jpg','assets/06_console_tray/02.jpg','assets/06_console_tray/03.jpg','assets/06_console_tray/04.jpg','assets/06_console_tray/05.jpg'],
   opts:[{n:'블랙',img:'assets/06_console_tray/07.jpg'}],
   tags:['TPE','방수','2026 전용'],
@@ -389,7 +392,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X 2026년형'],['소재','TPE'],['색상','블랙'],['구성','1pcs'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005011987670276.html'},
  {id:7,name:'도어 송풍구 메탈 커버',sub:'이물질 유입 차단 · 앞 도어 좌우 2pcs',zone:'도어 송풍구',status:'src',
-  spots:[{x:4.5,y:58},{x:95.5,y:58}],
+  short:'도어 송풍구 커버',spots:[{x:4.5,y:58},{x:95.5,y:58}],
   imgs:['assets/07_doorvent/01.jpg','assets/07_doorvent/03.jpg','assets/07_doorvent/04.jpg','assets/07_doorvent/05.jpg'],
   opts:[{n:'실버 티타늄',img:'assets/07_doorvent/06.jpg'},{n:'블랙 티타늄',img:'assets/07_doorvent/07.jpg'}],
   tags:['메탈','2pcs','2색'],
@@ -397,7 +400,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X'],['소재','금속 (티타늄 컬러 마감)'],['색상','실버 티타늄 · 블랙 티타늄'],['구성','2pcs (앞 도어 좌·우)'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005009253694362.html'},
  {id:8,name:'도어 안티킥 패드',sub:'인조가죽 · 앞뒤 도어 4pcs · 탈부착',zone:'도어 하단',status:'src',
-  spots:[{x:4,y:92},{x:96,y:92}],
+  short:'안티킥 패드',spots:[{x:4,y:92},{x:96,y:92}],
   imgs:['assets/08_antikick/01.jpg','assets/08_antikick/03.jpg','assets/08_antikick/04.jpg','assets/08_antikick/05.jpg','assets/08_antikick/06.jpg'],
   opts:[{n:'블랙',img:'assets/08_antikick/08.jpg'},{n:'그레이',img:'assets/08_antikick/09.jpg'},{n:'퍼플',img:'assets/08_antikick/07.jpg'}],
   tags:['인조가죽','4도어 4pcs','3색'],
@@ -405,7 +408,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X'],['소재','인조가죽 (PU)'],['색상','블랙 · 그레이 · 퍼플'],['구성','4pcs (앞·뒤 도어)'],['부착','벨크로'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005011807850090.html'},
  {id:9,name:'기어 레버 · 와이퍼 레버 장식 캡',sub:'ABS 스냅 장착 · 카본 / 매트 실버 / 유광 블랙',zone:'스티어링 컬럼',status:'src',
-  spots:[{x:39.3,y:45},{x:20.3,y:45}],
+  short:'레버 장식 캡',spots:[{x:39.3,y:45,d:'b'},{x:20.3,y:45}],
   imgs:['assets/09_levercap/01.jpg','assets/09_levercap/03.jpg','assets/09_levercap/05.jpg'],
   opts:[{n:'카본 패턴',img:'assets/09_levercap/06.jpg'},{n:'매트 실버',img:'assets/09_levercap/07.jpg'},{n:'유광 블랙',img:'assets/09_levercap/08.jpg'}],
   tags:['ABS','2pcs','3종 마감'],
@@ -413,7 +416,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X 2025 · 2026 (연식별 사이즈 구분)'],['소재','ABS'],['마감','카본 패턴 · 매트 실버 · 유광 블랙'],['구성','2pcs (기어 레버 + 와이퍼 레버)'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005011649869061.html'},
  {id:10,name:'스웨이드 TPU 스마트키 케이스',sub:'스웨이드 질감 TPU + 메탈 프레임 · 키체인 5종 구성',zone:'스마트키',status:'src',
-  spots:[{x:55.5,y:80.5}],
+  short:'스웨이드 키케이스',spots:[{x:55.5,y:80.5,d:'r'}],
   imgs:['assets/10_keycase_tpu2/01.jpg','assets/10_keycase_tpu2/03.jpg','assets/10_keycase_tpu2/04.jpg','assets/10_keycase_tpu2/05.jpg','assets/10_keycase_tpu2/06.jpg'],
   opts:[{n:'케이스 단품',img:'assets/10_keycase_tpu2/06.jpg'},{n:'링 키체인',img:'assets/10_keycase_tpu2/04.jpg'},{n:'링 + 가죽 스트랩',img:'assets/10_keycase_tpu2/03.jpg'},{n:'링 + 스트랩 + 카라비너',img:'assets/10_keycase_tpu2/01.jpg'},{n:'링 + 가죽 태그',img:'assets/10_keycase_tpu2/05.jpg'}],
   tags:['스웨이드 TPU','메탈 프레임','키체인 5종'],
@@ -421,7 +424,7 @@ const PRODUCTS = [
   specs:[['호환','지커 7X 스마트키 (지커 공용 키 규격)'],['소재','TPU (스웨이드 질감) + 메탈 프레임'],['색상','그레이'],['구성','케이스 1개 + 선택 키체인'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005008849164941.html'},
  {id:11,name:'메인 디스플레이 모서리 보호 실리콘 케이스',sub:'16″ 화면 테두리 전체를 감싸는 실리콘 범퍼 · 4색',zone:'디스플레이',status:'src',
-  spots:[{x:58.5,y:37}],
+  short:'디스플레이 모서리 케이스',spots:[{x:58.5,y:37,d:'r'}],
   imgs:['assets/11_screen_corner/01.jpg','assets/11_screen_corner/02.jpg','assets/11_screen_corner/03.jpg','assets/11_screen_corner/04.jpg','assets/11_screen_corner/06.jpg'],
   opts:[{n:'화이트',img:'assets/11_screen_corner/07.jpg'},{n:'블랙',img:'assets/11_screen_corner/08.jpg'},{n:'퍼플',img:'assets/11_screen_corner/09.jpg'},{n:'그레이',img:'assets/11_screen_corner/10.jpg'}],
   tags:['실리콘','풀커버 범퍼','4색'],
@@ -448,9 +451,9 @@ const canvas=document.getElementById('canvas'), hcard=document.getElementById('h
 PRODUCTS.forEach(p=>{
   p.spots.forEach((s,i)=>{
     const b=document.createElement('button');
-    b.className='spot'+(i?' sub':'')+(s.x>70?' flip':'');
+    b.className='spot'+(i?' sub':'')+' d-'+(s.d||(s.x>70?'l':'r'));
     b.style.left=s.x+'%'; b.style.top=s.y+'%';
-    b.dataset.id=p.id; b.innerHTML=p.id+'<span class="lbl">'+p.zone+' · '+p.name+'</span>';
+    b.dataset.id=p.id; b.innerHTML=p.id+'<span class="lbl">'+(p.short||p.name)+'</span>';
     b.addEventListener('mouseenter',()=>{hl(p.id,true);showCard(p,s);});
     b.addEventListener('mouseleave',()=>{hl(p.id,false);hideCard();});
     b.addEventListener('click',()=>openModal(p.id));
