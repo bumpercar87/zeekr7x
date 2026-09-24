@@ -277,7 +277,7 @@ body.locked #gate{display:flex}
     <div class="hero-head">
       <div>
         <div class="eyebrow">Interior Map · 2026 KR Spec</div>
-        <h1>지커 7X 2026년형 국내 버전 실내 악세사리<small>2026년형 국내 출시 사양 기준 · 실내 전용 애프터마켓 11종 · 부위별 번호를 누르면 상세 정보가 열립니다.</small></h1>
+        <h1>지커 7X 2026년형 국내 버전 실내 악세사리<small>2026년형 국내 출시 사양 기준 · 실내 전용 애프터마켓 13종 · 부위별 번호를 누르면 상세 정보가 열립니다.</small></h1>
       </div>
       <div class="hint"><span><i>1</i>마우스를 올리면 미리보기</span><span>클릭하면 상세 · 옵션 · 규격</span></div>
     </div>
@@ -299,7 +299,7 @@ body.locked #gate{display:flex}
 <section id="list">
   <div class="wrap">
     <div class="sec-head">
-      <div><div class="eyebrow">All Products</div><h2>전체 상품 11종</h2></div>
+      <div><div class="eyebrow">All Products</div><h2>전체 상품 13종</h2></div>
       <p>‘판매 준비 완료’는 국내용 상세페이지와 물량까지 준비된 품목, ‘소싱 가능’은 샘플·물량 확보가 바로 가능한 품목입니다. 원하시는 구성으로 묶어 공급해 드립니다.</p>
     </div>
     <div class="grid" id="cards"></div>
@@ -320,7 +320,7 @@ body.locked #gate{display:flex}
   <div class="wrap">
     <div class="sec-head">
       <div><div class="eyebrow">Sourcing Available</div><h2>추가로 소싱 가능한 실내 라인업</h2></div>
-      <p>현재 11종 외에도 실내 부위별로 아래 품목을 바로 소싱할 수 있습니다. 필요한 품목을 말씀해 주시면 샘플과 견적을 함께 드립니다.</p>
+      <p>현재 13종 외에도 실내 부위별로 아래 품목을 바로 소싱할 수 있습니다. 필요한 품목을 말씀해 주시면 샘플과 견적을 함께 드립니다.</p>
     </div>
     <div class="more" id="moreGrid"></div>
   </div>
@@ -376,7 +376,7 @@ const PRODUCTS = [
   specs:[['대상','지커 7X 2026년형'],['소재','실리콘'],['색상','그레이 · 블랙 · 화이트 · 오렌지 · 딥 퍼플'],['구성','1pcs'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005011862053326.html'},
  {id:5,name:'TPU 스마트키 케이스',sub:'소프트 TPU · 실버 링 키체인 세트 · 엔트리 옵션',zone:'스마트키',status:'src',
-  short:'TPU 키케이스',spots:[{x:49.7,y:85,d:'b'}],
+  short:'TPU 키케이스',spots:[{x:49.7,y:85,d:'l'}],
   imgs:['assets/05_keycase_tpu/02.jpg','assets/05_keycase_tpu/01.jpg','assets/05_keycase_tpu/03.jpg','assets/05_keycase_tpu/04.jpg','assets/05_keycase_tpu/05.jpg','assets/05_keycase_tpu/07.jpg'],
   opts:[{n:'화이트',img:'assets/05_keycase_tpu/02.jpg'},{n:'퍼플',img:'assets/05_keycase_tpu/03.jpg'},{n:'블랙',img:'assets/05_keycase_tpu/08.jpg'}],
   tags:['소프트 TPU','3색','가성비'],
@@ -431,15 +431,31 @@ const PRODUCTS = [
   feats:['디스플레이 모서리·테두리를 실리콘 범퍼가 감싸 부딪힘·긁힘 방지','실차 1:1 몰드로 화면에 딱 맞게 끼우는 방식, 무접착·무타공','유연한 실리콘이라 변형 없이 탈부착 가능','순정 실내 색상에 맞춘 화이트 · 블랙 · 퍼플 · 그레이','강화유리 필름(1번)과 함께 쓰면 화면 앞면 + 테두리 완전 보호'],
   specs:[['대상','지커 7X 2024 ~ 2026 (16″ 메인 디스플레이)'],['소재','실리콘'],['색상','화이트 · 블랙 · 퍼플 · 그레이'],['구성','1pcs'],['장착','끼움식 (무접착)'],['공급가','별도 견적']],
   src:'https://ko.aliexpress.com/item/1005009438452006.html'},
+ {id:12,short:'암레스트 수납 트레이',name:'암레스트 수납함 실리콘 트레이',sub:'센터 암레스트 내부 수납공간 전용 · 칸 분리 · 5색',zone:'센터 콘솔',status:'src',
+  spots:[{x:53,y:92,d:'r'}],
+  imgs:['assets/12_armrest_box/01.jpg','assets/12_armrest_box/02.jpg','assets/12_armrest_box/04.jpg','assets/12_armrest_box/05.jpg'],
+  opts:[{n:'퍼플',img:'assets/12_armrest_box/06.jpg'},{n:'그레이',img:'assets/12_armrest_box/07.jpg'},{n:'블랙',img:'assets/12_armrest_box/08.jpg'},{n:'화이트',img:'assets/12_armrest_box/09.jpg'},{n:'오렌지',img:'assets/12_armrest_box/10.jpg'}],
+  tags:['실리콘','칸 분리','5색'],
+  feats:['암레스트 박스 안쪽 바닥·벽면을 실리콘이 감싸 스크래치·오염 방지','칸이 나뉘어 있어 키·카드·케이블·시계 등 소지품 정리','논슬립 실리콘, 주행 중 내용물 소음 감소','꺼내서 물로 헹구면 끝, 무취 소재','2026 지커 7X 암레스트 형상 1:1, 5색 (퍼플 · 그레이 · 블랙 · 화이트 · 오렌지)'],
+  specs:[['대상','지커 7X 2026년형'],['소재','실리콘'],['색상','퍼플 · 그레이 · 블랙 · 화이트 · 오렌지'],['구성','1pcs'],['공급가','별도 견적']],
+  src:'https://ko.aliexpress.com/item/1005012454203935.html'},
+ {id:13,short:'무선충전 패드 매트',name:'무선충전 패드 실리콘 매트',sub:'중앙 무선충전 패널 보호 · 논슬립 · 4색',zone:'센터 콘솔',status:'src',
+  spots:[{x:49.7,y:60,d:'l'}],
+  imgs:['assets/13_wireless_pad/01.jpg','assets/13_wireless_pad/03.jpg','assets/13_wireless_pad/04.jpg','assets/13_wireless_pad/05.jpg'],
+  opts:[{n:'블랙',img:'assets/13_wireless_pad/06.jpg'},{n:'그레이',img:'assets/13_wireless_pad/07.jpg'},{n:'퍼플',img:'assets/13_wireless_pad/08.jpg'},{n:'화이트',img:'assets/13_wireless_pad/09.jpg'}],
+  tags:['실리콘','논슬립','4색'],
+  feats:['무선충전 패널 표면의 스크래치·지문·소음 방지','폰이 미끄러지지 않아 주행 중에도 충전 위치 유지','얇은 실리콘이라 무선충전 속도에 영향 없음','올려놓기만 하면 끝, 물세척 가능','실내 색상에 맞춘 4색 (블랙 · 그레이 · 퍼플 · 화이트)'],
+  specs:[['대상','지커 7X (2025 · 2026 무선충전 패널)'],['소재','실리콘'],['색상','블랙 · 그레이 · 퍼플 · 화이트'],['구성','1pcs (2폰 자리)'],['공급가','별도 견적']],
+  src:'https://ko.aliexpress.com/item/1005010031811297.html'},
 ];
 const PACKAGES=[
  {k:'PACKAGE A',t:'출고 보호 패키지',d:'출고 직후 가장 먼저 상하는 부위부터. 스크래치·오염이 생기기 전에 한 번에 장착합니다.',items:[1,11,7,8,9],foot:'권장 대상: 전 고객 기본 제안'},
- {k:'PACKAGE B',t:'정리 · 편의 패키지',d:'센터 콘솔 위아래 공간을 정리하고, 키까지 챙기는 실용 구성.',items:[4,6,5],foot:'권장 대상: 가족·장거리 고객'},
- {k:'PACKAGE C',t:'프리미엄 풀 패키지',d:'보호 + 정리 + 스타일. 알칸타라 스위치와 가죽 키케이스로 실내 완성도를 올립니다.',items:[1,11,3,2,4,6,7,8,9],foot:'권장 대상: 상위 트림·프리미엄 고객',hi:true},
+ {k:'PACKAGE B',t:'정리 · 편의 패키지',d:'센터 콘솔 위아래 공간을 정리하고, 키까지 챙기는 실용 구성.',items:[4,13,12,6,5],foot:'권장 대상: 가족·장거리 고객'},
+ {k:'PACKAGE C',t:'프리미엄 풀 패키지',d:'보호 + 정리 + 스타일. 알칸타라 스위치와 가죽 키케이스로 실내 완성도를 올립니다.',items:[1,11,3,2,4,13,12,6,7,8,9],foot:'권장 대상: 상위 트림·프리미엄 고객',hi:true},
 ];
 const MORE=[
  {z:'디스플레이 · 스티어링',items:['저반사 매트(AG) 필름 옵션','스티어링 휠 알칸타라 커버','안전벨트 패드 · 커버','카메라 렌즈 보호 필름']},
- {z:'센터 콘솔 · 2열',items:['무선충전 논슬립 매트','팔걸이 수납함 정리 트레이','컵홀더 리미터','2열 팔걸이 컵홀더 실리콘','뒷좌석 태블릿 거치대']},
+ {z:'센터 콘솔 · 2열',items:['컵홀더 리미터','2열 팔걸이 컵홀더 실리콘','뒷좌석 태블릿 거치대']},
  {z:'시트 · 도어',items:['시트 틈새 갭 필러','시트백 킥 커버','헤드레스트 후크','도어 실 스크래치 가드','도어 포켓 실리콘 매트','도어 핸들 보호 필름']},
  {z:'바닥 · 트렁크 · 기타',items:['TPE 바닥매트 (1·2열)','트렁크 매트 · 정리함','페달 커버','대시보드 매트','글로브박스 정리함','앰비언트 라이트 키트']},
 ];
@@ -557,7 +573,7 @@ document.addEventListener('keydown',e=>{if(!modal.classList.contains('open'))ret
   });
   h+=`<div class="sheet">${head('딜러 패키지 제안','PACKAGE PROPOSAL')}<div class="p-pk">${PACKAGES.map(k=>`<div class="p-pkg${k.hi?' hi':''}"><div class="k">${k.k}</div><h3>${k.t}</h3><p>${k.d}</p><ul>${k.items.map(id=>'<li><i>'+id+'</i>'+byId(id).name+'</li>').join('')}</ul><div class="imgs">${k.items.map(id=>'<img src="'+byId(id).imgs[0]+'">').join('')}</div><p style="margin-top:3mm">${k.foot}</p></div>`).join('')}</div>${foot}</div>`;
   h+=`<div class="sheet">${head('추가로 소싱 가능한 실내 라인업','SOURCING AVAILABLE')}<div class="p-more">${MORE.map(m=>'<div class="p-zone"><h4>'+m.z+'</h4><ul>'+m.items.map(i=>'<li>'+i+'</li>').join('')+'</ul></div>').join('')}</div>
-   <p style="margin-top:8mm;font-size:10pt;color:#555">현재 11종 외에도 위 품목을 바로 소싱할 수 있습니다. 필요한 품목을 말씀해 주시면 샘플과 견적을 함께 드립니다.</p>${foot}</div>`;
+   <p style="margin-top:8mm;font-size:10pt;color:#555">현재 13종 외에도 위 품목을 바로 소싱할 수 있습니다. 필요한 품목을 말씀해 주시면 샘플과 견적을 함께 드립니다.</p>${foot}</div>`;
   document.getElementById('print').innerHTML=h;
 })();
 </script>
