@@ -4,3 +4,9 @@
 assets/_raw/
 가격표_내부용.xlsx
 _tools/
+shop/supabase/
+shop/apps_script/
+가격표_가상.xlsx
+mockups/
+shop/demo_products.json
+shop/demo_variants.json
