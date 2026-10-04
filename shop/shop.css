@@ -456,3 +456,7 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
 /* 로고: 파일 높이 80px 중 로고 64px → 50px로 표시하면 로고가 정확히 40px (README 최소 크기) */
 .brand .bg-logo,.ft-logo{height:50px;width:auto}
 @media (max-width:860px){.brand .bg-logo{height:50px}}
+
+/* 홈: 상품 목록과 '전체 상품 보기' 버튼 사이 간격 */
+.home-more{text-align:center;margin:56px 0 72px;padding-top:36px;border-top:1px solid var(--hair)}
+@media (max-width:860px){.home-more{margin:40px 0 56px;padding-top:28px}}

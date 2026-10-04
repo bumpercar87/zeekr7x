@@ -545,7 +545,7 @@ function viewHome() {
   ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
   ${news.length ? `<div class="sec-h"><h2>신규 입고</h2><a href="#/products" data-goto="NEW">신상품 전체 →</a></div><div class="row4">${news.map(productCard).join('')}</div>` : ''}
   ${bests.length ? `<div class="sec-h"><h2>베스트 상품</h2><a href="#/products" data-goto="BEST">베스트 전체 →</a></div><div class="row4">${bests.map(productCard).join('')}</div>` : ''}
-  <div style="text-align:center;margin:10px 0 60px"><a class="btn pri" href="#/products">전체 상품 보기 (${sellable.length})</a></div>`;
+  <div class="home-more"><a class="btn pri" href="#/products">전체 상품 보기 (${sellable.length})</a></div>`;
   $$('[data-goto]').forEach(a => a.onclick = () => { S.filter = a.dataset.goto; });
   $$('[data-reorder]').forEach(b => b.onclick = () => reorder(+b.dataset.reorder));
   if (S.orders === null) loadOrders().then(() => { if ((location.hash || '#/') === '#/') viewHome(); }).catch(() => {});
