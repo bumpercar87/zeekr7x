@@ -8,4 +8,4 @@ window.SHEET_URL = 'https://docs.google.com/spreadsheets/d/19crq_-szVqdJRlVK12RK
 window.KAKAO_CHANNEL_URL = '';
 
 // 상품 사진 버전 (사진을 교체하면 숫자를 올려 주세요)
-window.ASSET_V = '10042100';
+window.ASSET_V = '10042200';
