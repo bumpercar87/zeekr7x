@@ -117,6 +117,7 @@ function renderNav() {
     <a href="#/settings" class="${on('#/settings')}">설정</a>
     <a href="index.html${DEMO ? location.search : ''}">딜러 화면</a>
     <button data-act="logout">로그아웃</button>`;
+  const brand = document.querySelector('.brand'); if (brand && DEMO) brand.href = 'index.html' + location.search + '#/';
 }
 
 document.addEventListener('click', async e => {
