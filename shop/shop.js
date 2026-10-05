@@ -208,11 +208,13 @@ function renderNav() {
     return r.startsWith(h);
   };
   const c = h => on(h) ? 'on' : '';
+  // 딜러가 할 일이 있는 주문: 입금 알림 전 입금대기 + 받았어요 전 배송중
+  const todo = (S.orders || []).filter(o => (o.status === 'pending_payment' && !o.paid_notified_at) || o.status === 'shipped').length;
   const openInq = (S.inquiries || []).filter(q => q.status === 'answered' && !store('zk_seen_' + q.id)).length;
   nav.innerHTML = `
     <a href="#/" class="${c('#/')}">홈</a>
     <a href="#/products" class="${c('#/products')}">상품</a>
-    <a href="#/orders" class="${c('#/orders')}">주문내역</a>
+    <a href="#/orders" class="${c('#/orders')}">주문내역${todo ? `<span class="cnt">${todo}</span>` : ''}</a>
     <a href="#/inquiries" class="${c('#/inquiries')}">문의${openInq ? `<span class="cnt">${openInq}</span>` : ''}</a>
     <a href="#/cart" class="${c('#/cart')}">장바구니${n ? `<span class="cnt">${n}</span>` : ''}</a>
     ${S.dealer.is_admin ? `<a href="admin.html${DEMO ? location.search : ''}" class="admin-link"><span class="pc">관리자</span><span class="mo">관리</span></a>` : ''}
@@ -1071,7 +1073,7 @@ async function viewDone(no) {
 
 // ---------------------------------------------------------------- 주문 내역
 async function loadOrders(force) {
-  if (!S.orders || force) S.orders = await api.orders();
+  if (!S.orders || force) { S.orders = await api.orders(); renderNav(); }
   return S.orders;
 }
 
