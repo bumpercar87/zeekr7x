@@ -543,6 +543,7 @@ function viewShop() {
       <p class="brief-note">공급가는 VAT 포함입니다</p>
     </aside>
     <div>
+      <div class="m-brief">${[st.free_shipping_over ? `<b>${won(st.free_shipping_over)}원 이상</b> 무료배송` : '', cutoffText(st.same_day_cutoff) ? `<b>${cutoffText(st.same_day_cutoff)} 이전</b> 입금 확인분 당일 출고` : ''].filter(Boolean).map(x => `<div>${x}</div>`).join('')}</div>
       <div class="filters">${cats.map(c => `<button class="chip ${c === S.filter ? 'on' : ''}" data-cat="${esc(c)}">${esc(label(c))}</button>`).join('')}</div>
       <div class="grid">${list.map(productCard).join('')}</div>
     </div>
@@ -560,7 +561,7 @@ function viewHome() {
   <div id="topboxes">${topBoxes()}</div>
   <div class="help-bar">
     <span class="kk-badge" aria-hidden="true">${KAKAO_ICON}</span>
-    <div class="hb-t"><b>궁금한 점이 있으신가요?</b><span>재고·출고일·호환 여부는 카카오톡으로 빠르게, 교환·반품·대량 견적은 1:1 문의로 남겨 주세요.</span></div>
+    <div class="hb-t"><b>궁금한 점이 있으신가요?</b><span>${window.KAKAO_CHANNEL_URL ? '재고·출고일·호환 여부는 카카오톡으로 빠르게, 교환·반품·대량 견적은 1:1 문의로 남겨 주세요.' : '재고·출고일·호환 여부, 교환·반품·대량 견적 모두 1:1 문의로 남겨 주세요.'}</span></div>
     <div class="hb-btns">
       ${window.KAKAO_CHANNEL_URL ? `<a class="btn sm kakao-btn" href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">${KAKAO_ICON}카카오톡 문의</a>` : ''}
       <a class="btn sm ghost" href="#/inquiries/new">1:1 문의</a>
@@ -751,18 +752,20 @@ const couponLabel = c => c.kind === 'amount' ? `${won(c.value)}원 할인` : c.k
 
 function couponBox(sub, ship) {
   const list = S.myCoupons || [], cur = S.coupon;
-  const ok = c => (c.min_order || 0) <= sub;
+  // 이미 무료배송이면 무료배송 쿠폰은 쓸 수 없게 (0원 할인으로 쿠폰만 소진되지 않도록)
+  const noShip = c => c.kind === 'free_ship' && !ship;
+  const ok = c => (c.min_order || 0) <= sub && !noShip(c);
   return `
   <div class="cp-box">
     <div class="cp-h">쿠폰 ${list.length ? `<span class="mut small">사용 가능 ${list.length}장</span>` : ''}</div>
     ${cur ? `
       <div class="cp-on ${ok(cur) ? '' : 'bad'}">
         <div><b>${esc(cur.name)}</b><div class="small">${couponLabel(cur)}${cur.min_order ? ` · ${won(cur.min_order)}원 이상` : ''}</div>
-          ${ok(cur) ? '' : `<div class="small" style="color:var(--bad)">${won(cur.min_order - sub)}원 더 담아야 쓸 수 있어요</div>`}</div>
+          ${ok(cur) ? '' : `<div class="small" style="color:var(--bad)">${noShip(cur) ? '이미 무료배송이라 쓸 필요가 없어요' : `${won(cur.min_order - sub)}원 더 담아야 쓸 수 있어요`}</div>`}</div>
         <button class="rm" id="cpx">빼기</button>
       </div>
       ${ok(cur) ? `<div class="row disc-row"><span>쿠폰 할인</span><b>−${won(couponDiscount(cur, sub, ship))}원</b></div>` : ''}` : `
-      ${list.length ? `<select id="cpsel"><option value="">쿠폰 선택</option>${list.map(c => `<option value="${c.id}" ${ok(c) ? '' : 'disabled'}>${esc(c.name)} · ${couponLabel(c)}${ok(c) ? '' : ` (${won(c.min_order)}원 이상)`}</option>`).join('')}</select>` : ''}
+      ${list.length ? `<select id="cpsel"><option value="">쿠폰 선택</option>${list.map(c => `<option value="${c.id}" ${ok(c) ? '' : 'disabled'}>${esc(c.name)} · ${couponLabel(c)}${ok(c) ? '' : noShip(c) ? ' (이미 무료배송)' : ` (${won(c.min_order)}원 이상)`}</option>`).join('')}</select>` : ''}
       <div class="cp-code-row"><input id="cpcode" placeholder="쿠폰 코드 입력" autocomplete="off"><button class="btn sm" id="cpapply" type="button">적용</button></div>
       <div class="err" id="cperr"></div>`}
   </div>`;
@@ -782,6 +785,17 @@ function bindCoupon() {
 }
 
 // ---------------------------------------------------------------- 장바구니 / 주문서
+// 지금 가격·설정 기준 장바구니 총액 (주문 직전 변경 확인용 · viewCart 계산과 동일)
+function cartTotal() {
+  const cart = getCart(), pq = {};
+  cart.forEach(c => { const v = variant(c.variant_id); if (v) pq[v.product_id] = (pq[v.product_id] || 0) + c.qty; });
+  let sub = 0;
+  cart.forEach(c => { const v = variant(c.variant_id); if (v) sub += unitPrice(v.price, rateFor(pq[v.product_id], S.settings)) * c.qty; });
+  const ship = shippingFor(sub), c = S.coupon;
+  const cp = c && (c.min_order || 0) <= sub && !(c.kind === 'free_ship' && !ship) ? c : null;
+  return sub + ship - (cp ? couponDiscount(cp, sub, ship) : 0);
+}
+
 function viewCart() {
   const cart = getCart();
   if (!cart.length) {
@@ -817,7 +831,7 @@ function viewCart() {
   const ship = shippingFor(sub), d = S.dealer, st = S.settings;
   if (S.myCoupons === undefined) { S.myCoupons = null; api.myCoupons().then(l => { S.myCoupons = l; if (location.hash === '#/cart') viewCart(); }).catch(() => { S.myCoupons = []; }); }
   const need = st.free_shipping_over && ship ? st.free_shipping_over - sub : 0;
-  const cp = S.coupon && (S.coupon.min_order || 0) <= sub ? S.coupon : null;
+  const cp = S.coupon && (S.coupon.min_order || 0) <= sub && !(S.coupon.kind === 'free_ship' && !ship) ? S.coupon : null;
   const cdisc = cp ? couponDiscount(cp, sub, ship) : 0;
   // 입력하던 주문서 내용 유지 (수량을 바꿔 화면을 다시 그려도 지워지지 않게)
   const D = S.draft = S.draft || {
@@ -928,7 +942,14 @@ function viewCart() {
     if (need.some(x => !x)) { err.textContent = '필수 항목(*)을 모두 입력해 주세요.'; return; }
     if (D.tax && (!t(D.tax_biz_no) || !t(D.tax_email))) { err.textContent = '세금계산서용 사업자등록번호와 이메일을 입력해 주세요.'; return; }
     const dest = store ? '기본 배송지' : '다른 주소';
+    if (S.coupon && !cp && S.coupon.kind === 'free_ship' && !ship) { err.textContent = `이미 무료배송이라 쿠폰 '${S.coupon.name}'은 쓸 수 없어요. 쿠폰을 빼 주세요.`; return; }
     if (S.coupon && !cp) { err.textContent = `쿠폰 '${S.coupon.name}'은 ${won(S.coupon.min_order)}원 이상 주문 시 쓸 수 있어요. 쿠폰을 빼거나 상품을 더 담아 주세요.`; return; }
+    // 화면을 연 뒤 관리자가 가격·할인·배송비를 바꿨을 수 있어 최신 값으로 다시 계산
+    btn.disabled = true;
+    await refreshStock();
+    try { S.settings = (await api.catalog()).settings || S.settings; } catch (e) { /* 그대로 진행 */ }
+    btn.disabled = false;
+    if (cartTotal() !== sub + ship - cdisc) { viewCart(); toast('가격·배송비가 변경되어 다시 계산했어요. 금액을 확인하고 다시 주문해 주세요.', 4000); return; }
     if (!await ask(`총 ${won(sub + ship - cdisc)}원을 주문하시겠습니까?\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: '주문하기' })) return;
     btn.disabled = true; btn.textContent = '주문 처리 중…'; err.textContent = '';
     try {

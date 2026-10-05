@@ -25,6 +25,7 @@ const won = n => (n ?? 0).toLocaleString('ko-KR');
 function cutoffText(v) {
   const m = String(v || '').match(/^(\d{1,2}):?(\d{2})?$/); if (!m) return '';
   const h = +m[1], mi = +(m[2] || 0);
+  if (h > 23 || mi > 59) return '';
   return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${mi ? ` ${mi}분` : ''}`;
 }
 // 사진 버전: 사진 파일을 바꾸면 config.js 의 ASSET_V 숫자를 올려 브라우저가 새로 받게 함

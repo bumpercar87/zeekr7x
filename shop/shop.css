@@ -487,3 +487,9 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
 .brief .bh{font-size:13px;font-weight:700;color:var(--mut);letter-spacing:.02em;margin-bottom:4px}
 .brief b.acc{color:var(--acc)}
 .brief-note{font-size:13px;color:var(--mut);margin:10px 2px 0}
+.m-brief{display:none}
+@media (max-width:860px){
+  .m-brief{display:block;background:#fff;border:1px solid var(--hair);padding:10px 14px;margin:0 0 14px;font-size:14px;line-height:1.7;color:var(--ink2)}
+  .m-brief:empty{display:none}
+  .m-brief b{color:var(--acc)}
+}

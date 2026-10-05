@@ -208,7 +208,7 @@ function orderDetail(o) {
       ${o.status !== 'cancelled' ? `
       <div class="stat-btns">
         ${next ? `<button class="btn sm pri" data-next="${next[0]}">${next[1]} →</button>` : ''}
-        ${o.status !== 'delivered' ? `<button class="btn sm ghost" data-cancel>주문 취소 (재고 복원)</button>` : ''}
+        ${o.status !== 'delivered' ? `<button class="btn sm ghost" data-cancel>${o.status === 'shipped' ? '주문 취소' : '주문 취소 (재고 복원)'}</button>` : ''}
         <select data-set title="상태 직접 변경" class="btn sm ghost" style="padding:6px 8px">
           <option value="">상태 직접 변경…</option>${FLOW.filter(s => s !== o.status).map(s => `<option value="${s}">${STATUS[s]}</option>`).join('')}
         </select>
@@ -246,20 +246,22 @@ function bindDetail() {
       catch (e) { toast(errMsg(e), 4000); }
     };
     const nx = $('[data-next]', box);
-    if (nx) nx.onclick = () => {
+    if (nx) nx.onclick = async () => {
       const st = nx.dataset.next;
+      if (st === 'paid' && !await ask(`입금 확인 처리할까요?\n입금자 ${o.depositor_name || '-'} · ${won(o.total)}원\n딜러에게 입금 확인 메일이 발송됩니다.`, { ok: '입금 확인' })) return;
       if (st === 'shipped') {
         const s = ship();
-        if (!s.tracking_no) return toast('택배사와 송장번호를 먼저 입력해 주세요');
+        if (!s.carrier) return toast('택배사를 선택해 주세요');
+        if (!s.tracking_no && s.carrier !== '직접배송') return toast('송장번호를 입력해 주세요');
         return set({ status: st, ...s }, `${o.order_no} 배송 시작`);
       }
       set({ status: st }, `${o.order_no} → ${STATUS[st]}`);
     };
     const cc = $('[data-cancel]', box);
     if (cc) cc.onclick = () => {
-      const why = prompt('취소 사유 (딜러에게 표시됩니다)', '관리자 취소');
+      const why = prompt(`${o.status === 'shipped' ? '이미 출고된 주문이라 재고는 되돌리지 않습니다.\n' : ''}취소 사유 (딜러에게 표시됩니다)`, '관리자 취소');
       if (why === null) return;  // 사유 입력이 필요해 prompt 유지
-      set({ status: 'cancelled', cancel_reason: why || '관리자 취소' }, `${o.order_no} 취소 · 재고 복원`);
+      set({ status: 'cancelled', cancel_reason: why || '관리자 취소' }, `${o.order_no} 취소${o.status === 'shipped' ? '' : ' · 재고 복원'}`);
     };
     const sel = $('[data-set]', box);
     if (sel) sel.onchange = async () => { if (sel.value && await ask(`상태를 '${STATUS[sel.value]}'(으)로 바꿀까요?`)) set({ status: sel.value }, '상태를 변경했습니다'); else sel.value = ''; };
@@ -667,7 +669,7 @@ function viewCoupons() {
     const sd = f.starts_at.value, edd = f.ends_at.value;
     const patch = {
       name: f.name.value.trim(), code, kind, value: kind === 'free_ship' ? 0 : num('value'),
-      max_discount: kind === 'percent' ? num('max_discount') : null, min_order: num('min_order') || 0, target,
+      max_discount: kind === 'percent' ? (num('max_discount') || null) : null, min_order: num('min_order') || 0, target,
       once_per_dealer: f.once_per_dealer.checked, first_order_only: f.first_order_only.checked,
       starts_at: sd ? new Date(sd + 'T00:00:00+09:00').toISOString() : null,
       ends_at: edd ? new Date(edd + 'T23:59:59+09:00').toISOString() : null,
