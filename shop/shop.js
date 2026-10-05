@@ -818,7 +818,7 @@ function viewCart() {
     orderer_name: d.manager_name, orderer_phone: d.phone,
     dest: 'store', ship_name: d.manager_name, ship_phone: d.phone, addr1: d.address || '', addr2: '',
     c_name: '', c_phone: '', c_addr1: '', c_addr2: '',
-    depositor: d.company, memo: '', tax: false, tax_biz_no: d.biz_no || '', tax_email: d.email, save_addr: false,
+    depositor: d.manager_name || d.company, memo: '', tax: false, tax_biz_no: d.biz_no || '', tax_email: d.email, save_addr: false,
   };
   const store = D.dest === 'store';
 
@@ -891,6 +891,9 @@ function viewCart() {
   const f = $('#of');
   if (!store && D.c_addr2) f.addr2.value = D.c_addr2;
   if (store && D.addr2) f.addr2.value = D.addr2;
+  f.orderer_name.addEventListener('input', () => {
+    if (f.depositor.value === D.orderer_name) f.depositor.value = f.orderer_name.value;
+  });
   const keep = () => {
     D.orderer_name = f.orderer_name.value; D.orderer_phone = f.orderer_phone.value;
     if (store) { D.ship_name = f.ship_name.value; D.ship_phone = f.ship_phone.value; D.addr1 = f.addr1.value; D.addr2 = f.addr2.value; D.save_addr = f.save_addr.checked; }
