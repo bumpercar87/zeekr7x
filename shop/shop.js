@@ -303,6 +303,10 @@ function viewAuth(tab = 'login') {
       if (signup) {
         const meta = { company: v('company'), branch: v('branch') || null, manager_name: v('manager_name'), phone: v('phone'), biz_no: v('biz_no') || null, address: addrValue(f) || null };
         const r = await api.signUp(v('email'), v('password'), meta);
+        // 이미 가입된 이메일이면 Supabase가 성공처럼 응답하지만 메일은 보내지 않음 (identities 가 비어 있음)
+        if (r.user && Array.isArray(r.user.identities) && r.user.identities.length === 0) {
+          return fail('email', '이미 가입된 이메일입니다. 로그인하거나 비밀번호 찾기를 이용해 주세요.');
+        }
         if (!r.session) return viewVerify(v('email'));
       } else {
         try { await api.signIn(v('email'), v('password')); }
