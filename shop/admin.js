@@ -1,5 +1,5 @@
 // ZEEKR 7X 관리자 페이지
-const A = { user: null, me: null, orders: [], dealers: [], products: [], variants: [], settings: {}, notices: [], inquiries: [], editNotice: null, inqF: 'open', f: { st: 'all', q: '', from: '', to: '' }, open: new Set(), dirty: {} };
+const A = { user: null, me: null, orders: [], dealers: [], products: [], variants: [], settings: {}, notices: [], inquiries: [], coupons: [], editCoupon: null, editNotice: null, inqF: 'open', f: { st: 'all', q: '', from: '', to: '' }, open: new Set(), dirty: {} };
 const CARRIERS = ['CJ대한통운', '롯데택배', '한진택배', '우체국택배', '로젠택배', '경동택배', '직접배송'];
 
 // ---------------------------------------------------------------- 데이터
@@ -17,11 +17,12 @@ const api = DEMO ? demoAdminApi() : {
       sb.from('shop_settings').select('*').eq('id', 1).maybeSingle(),
     ]);
     for (const r of [o, d, p, v, s]) if (r.error) throw r.error;
-    const [n, q] = await Promise.all([
+    const [n, q, c] = await Promise.all([
       sb.from('notices').select('*').order('pinned', { ascending: false }).order('created_at', { ascending: false }),
       sb.from('inquiries').select('*, dealers(company,branch,manager_name,phone,email), orders(order_no)').order('created_at', { ascending: false }),
+      sb.from('coupons').select('*, coupon_grants(dealer_id)').order('created_at', { ascending: false }),
     ]);
-    return { orders: o.data, dealers: d.data, products: p.data, variants: v.data, settings: s.data || {}, notices: n.error ? [] : n.data, inquiries: q.error ? [] : q.data };
+    return { orders: o.data, dealers: d.data, products: p.data, variants: v.data, settings: s.data || {}, notices: n.error ? [] : n.data, inquiries: q.error ? [] : q.data, coupons: c.error ? [] : c.data };
   },
   async saveNotice(id, patch) {
     const q = id ? sb.from('notices').update(patch).eq('id', id) : sb.from('notices').insert(patch);
@@ -34,6 +35,16 @@ const api = DEMO ? demoAdminApi() : {
   async updProduct(id, patch) { const { error } = await sb.from('products').update(patch).eq('id', id); if (error) throw error; },
   async updDealer(id, patch) { const { error } = await sb.from('dealers').update(patch).eq('id', id); if (error) throw error; },
   async delDealer(id) { const { error } = await sb.rpc('admin_delete_dealer', { p_dealer_id: id }); if (error) throw error; },
+  async saveCoupon(id, patch, grants) {
+    let cid = id;
+    if (id) { const { error } = await sb.from('coupons').update(patch).eq('id', id); if (error) throw error; }
+    else { const { data, error } = await sb.from('coupons').insert(patch).select('id').single(); if (error) throw error; cid = data.id; }
+    if (grants) {
+      const { error: e1 } = await sb.from('coupon_grants').delete().eq('coupon_id', cid); if (e1) throw e1;
+      if (grants.length) { const { error: e2 } = await sb.from('coupon_grants').insert(grants.map(d => ({ coupon_id: cid, dealer_id: d }))); if (e2) throw e2; }
+    }
+  },
+  async delCoupon(id) { const { error } = await sb.from('coupons').delete().eq('id', id); if (error) throw error; },
   async updSettings(patch) { const { error } = await sb.from('shop_settings').update(patch).eq('id', 1); if (error) throw error; },
 };
 
@@ -53,7 +64,7 @@ function demoAdminApi() {
         const products = await (await fetch('demo_products.json', { cache: 'no-store' })).json();
         const variants = await (await fetch('demo_variants.json', { cache: 'no-store' })).json();
         const orders = (store('zk_demo_orders') || []).map(o => ({ ...o, dealers: dealers[0] }));
-        data = { inquiries: (store('zk_demo_inq') || []).map(q => ({ ...q, dealers: dealers[0] })), notices: [{ id: 1, title: '10월 9일 한글날 휴무 안내', body: '10/8(수) 오후 2시 입금 확인분까지 당일 출고됩니다.', pinned: true, active: true, created_at: new Date().toISOString() }], orders, dealers, products, variants, settings: { bank_name: '○○은행', bank_account: '000-000000-00-000', bank_holder: '브링고', pay_deadline_days: 3, shipping_fee: 3000, free_shipping_over: 100000, notice: '주문 후 3일 이내 입금해 주세요.', qty_discounts: [{ min: 30, rate: 5 }, { min: 50, rate: 10 }], biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com', ship_info: '출고: 입금 확인 후 1~2영업일 이내' } };
+        data = { coupons: [{ id: 1, name: '첫 구매 10% 할인', code: 'WELCOME10', kind: 'percent', value: 10, max_discount: 30000, min_order: 50000, target: 'all', once_per_dealer: true, first_order_only: true, starts_at: null, ends_at: null, active: true, created_at: new Date().toISOString(), coupon_grants: [] }], inquiries: (store('zk_demo_inq') || []).map(q => ({ ...q, dealers: dealers[0] })), notices: [{ id: 1, title: '10월 9일 한글날 휴무 안내', body: '10/8(수) 오후 2시 입금 확인분까지 당일 출고됩니다.', pinned: true, active: true, created_at: new Date().toISOString() }], orders, dealers, products, variants, settings: { bank_name: '○○은행', bank_account: '000-000000-00-000', bank_holder: '브링고', pay_deadline_days: 3, shipping_fee: 3000, free_shipping_over: 100000, notice: '주문 후 3일 이내 입금해 주세요.', qty_discounts: [{ min: 30, rate: 5 }, { min: 50, rate: 10 }], biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com', ship_info: '출고: 입금 확인 후 1~2영업일 이내' } };
       }
       return data;
     },
@@ -61,6 +72,12 @@ function demoAdminApi() {
     async updVariant(id, patch) { Object.assign(data.variants.find(x => x.id === id), patch); },
     async updProduct(id, patch) { Object.assign(data.products.find(x => x.id === id), patch); },
     async updDealer(id, patch) { Object.assign(data.dealers.find(x => x.id === id), patch); },
+    async saveCoupon(id, patch, grants) {
+      let c = id && data.coupons.find(x => x.id === id);
+      if (c) Object.assign(c, patch); else { c = { id: Date.now(), created_at: new Date().toISOString(), coupon_grants: [], ...patch }; data.coupons.unshift(c); }
+      if (grants) c.coupon_grants = grants.map(d => ({ dealer_id: d }));
+    },
+    async delCoupon(id) { data.coupons = data.coupons.filter(x => x.id !== id); },
     async delDealer(id) {
       if (data.orders.some(o => o.dealer_id === id || (id === 'demo' && o.dealers))) throw new Error('주문 내역이 있는 딜러는 삭제할 수 없습니다. 거래 기록 보관을 위해 [이용 중지]로 처리해 주세요.');
       data.dealers = data.dealers.filter(x => x.id !== id);
@@ -77,6 +94,7 @@ function demoAdminApi() {
 
 async function reload() {
   Object.assign(A, await api.load());
+  A.products.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
   renderNav();
 }
 
@@ -94,6 +112,7 @@ function renderNav() {
     <a href="#/stock" class="${on('#/stock')}">재고·가격</a>
     <a href="#/dealers" class="${on('#/dealers')}">딜러${nDealer ? `<span class="pill">${nDealer}</span>` : ''}</a>
     <a href="#/inquiries" class="${on('#/inquiries')}">문의${A.inquiries.filter(q => q.status === 'open').length ? `<span class="pill">${A.inquiries.filter(q => q.status === 'open').length}</span>` : ''}</a>
+    <a href="#/coupons" class="${on('#/coupons')}">쿠폰</a>
     <a href="#/notices" class="${on('#/notices')}">공지</a>
     <a href="#/settings" class="${on('#/settings')}">설정</a>
     <a href="index.html${DEMO ? location.search : ''}">딜러 화면</a>
@@ -183,6 +202,7 @@ function orderDetail(o) {
     <div>
       <table>${items.map(i => `<tr><td>${esc(i.product_name)} <span class="mut">· ${esc(i.option_name)} · ${esc(i.sku || '')}</span></td><td class="n">${i.discount_rate ? `<span style="color:var(--acc)">${i.discount_rate}%↓</span> ` : ''}${won(i.unit_price)} × ${i.qty}</td><td class="n">${won(i.line_total)}원</td></tr>`).join('')}
         <tr><td class="mut">배송비</td><td></td><td class="n">${o.shipping_fee ? won(o.shipping_fee) + '원' : '무료'}</td></tr>
+        ${o.coupon_discount ? `<tr><td class="mut">쿠폰 · ${esc(o.coupon_name || '')}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.coupon_discount)}원</td></tr>` : ''}
         <tr><td><b>합계</b></td><td></td><td class="n"><b>${won(o.total)}원</b></td></tr></table>
       ${o.status !== 'cancelled' ? `
       <div class="stat-btns">
@@ -249,13 +269,13 @@ function bindDetail() {
 }
 
 function downloadCSV(list) {
-  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일'];
+  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일', '쿠폰', '쿠폰할인'];
   const rows = [];
   for (const o of list) for (const [k, i] of (o.order_items || []).entries()) {
     const d = o.dealers || {};
     rows.push([fmtDT(o.created_at), o.order_no, STATUS[o.status], d.company, d.branch, d.manager_name, d.phone, i.product_name, i.option_name, i.sku, i.unit_price, i.qty, i.line_total,
       k === 0 ? o.shipping_fee : '', k === 0 ? o.total : '', o.depositor_name, o.ship_name, o.ship_phone, o.ship_address, o.memo, o.carrier, o.tracking_no, fmtDT(o.paid_at), fmtDT(o.shipped_at), fmtDT(o.delivered_at), o.admin_memo,
-      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email]);
+      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email, k === 0 ? o.coupon_name : '', k === 0 ? o.coupon_discount || '' : '']);
   }
   const csv = [head, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
@@ -279,10 +299,10 @@ function viewStock() {
   <div class="tbl-wrap"><table class="tbl" id="stbl">
     <thead><tr><th>SKU</th><th>옵션</th><th class="n">공급가</th><th class="n">소비자가</th><th class="n">재고</th><th class="n">최소수량</th><th>판매</th></tr></thead>
     <tbody>
-    ${A.products.map(p => {
+    ${A.products.map((p, pi) => {
       const vs = A.variants.filter(v => v.product_id === p.id);
       return `
-      <tr class="grp ${p.active ? '' : 'off'}" data-pid="${p.id}"><td colspan="6">${p.id}. ${esc(p.name)} <span class="mut" style="font-weight:400">· ${esc(p.category || '')}</span></td>
+      <tr class="grp ${p.active ? '' : 'off'}" data-pid="${p.id}"><td colspan="6"><span class="sorter"><button type="button" data-mv="-1" data-pid="${p.id}" title="위로" ${pi === 0 ? 'disabled' : ''}>▲</button><button type="button" data-mv="1" data-pid="${p.id}" title="아래로" ${pi === A.products.length - 1 ? 'disabled' : ''}>▼</button></span>${pi + 1}. ${esc(p.name)} <span class="mut" style="font-weight:400">· ${esc(p.category || '')}</span></td>
         <td><div class="flags">
           <label class="small"><input type="checkbox" class="toggle" data-pflag="is_new" data-pid="${p.id}" ${p.is_new ? 'checked' : ''}> <span class="fl-new">NEW</span></label>
           <label class="small"><input type="checkbox" class="toggle" data-pflag="is_best" data-pid="${p.id}" ${p.is_best ? 'checked' : ''}> <span class="fl-best">BEST</span></label>
@@ -340,6 +360,17 @@ function viewStock() {
     } catch (e) { toast(errMsg(e), 4000); btn.disabled = false; }
   };
   $$('[data-pedit]').forEach(b => b.onclick = () => editProduct(+b.dataset.pedit));
+  // 상품 노출 순서: 위·아래 상품과 자리 바꾸기 (딜러 화면 목록 순서)
+  $$('[data-mv]').forEach(b => b.onclick = async () => {
+    const list = [...A.products], i = list.findIndex(p => p.id === +b.dataset.pid), j = i + +b.dataset.mv;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    try {
+      const changes = list.map((p, k) => ({ p, sort: k + 1 })).filter(x => x.p.sort !== x.sort);
+      for (const x of changes) await api.updProduct(x.p.id, { sort: x.sort });
+      await reload(); viewStock(); toast('노출 순서를 바꿨습니다');
+    } catch (e) { toast(errMsg(e), 4000); }
+  });
   $$('[data-pflag]').forEach(cb => cb.onchange = async () => {
     const k = cb.dataset.pflag, nm = k === 'is_new' ? 'NEW' : 'BEST';
     try { await api.updProduct(+cb.dataset.pid, { [k]: cb.checked }); await reload(); viewStock(); toast(cb.checked ? `${nm} 딱지를 붙였습니다` : `${nm} 딱지를 뗐습니다`); }
@@ -368,7 +399,7 @@ function viewDealers() {
       return `<tr>
         <td class="d">${fmtDT(d.created_at)}</td>
         <td>${dealerName(d)}<div class="d">${esc(d.address || '')}</div></td>
-        <td>${esc(d.manager_name)}<div class="d">${esc(d.phone)}</div></td>
+        <td>${esc(d.manager_name)}${d.position ? ` <span class="mut">${esc(d.position)}</span>` : ''}<div class="d">${esc(d.phone)}</div></td>
         <td class="small">${esc(d.email)}</td>
         <td class="small">${esc(d.biz_no || '-')}</td>
         <td class="n">${n}건<div class="d">${won(s)}원</div></td>
@@ -546,6 +577,115 @@ function viewInquiriesAdmin() {
   });
 }
 
+// ---------------------------------------------------------------- 쿠폰
+const CP_KIND = { amount: '정액 할인', percent: '정률 할인', free_ship: '무료배송' };
+const CP_TARGET = { code: '코드 입력', all: '전체 딜러', assigned: '지정 딜러' };
+const cpBenefit = c => c.kind === 'amount' ? `${won(c.value)}원 할인` : c.kind === 'percent' ? `${c.value}% 할인${c.max_discount ? ` (최대 ${won(c.max_discount)}원)` : ''}` : '배송비 무료';
+const dayStr = t => t ? new Date(t).toLocaleDateString('sv-SE') : '';
+
+function viewCoupons() {
+  const ed = A.editCoupon ? A.coupons.find(c => c.id === A.editCoupon) : null;
+  const used = id => A.orders.filter(o => o.coupon_id === id && o.status !== 'cancelled').length;
+  const dealers = A.dealers.filter(d => !d.is_admin && d.status === 'approved');
+  const granted = new Set((ed?.coupon_grants || []).map(g => g.dealer_id));
+  const f0 = ed || { kind: 'amount', target: 'code', once_per_dealer: true, first_order_only: false, active: true, min_order: 0 };
+  app().innerHTML = `
+  <div class="page-head"><div><div class="eyebrow">Coupon · ${A.coupons.length}</div><h1>쿠폰</h1></div>
+    <div class="small mut">쿠폰 할인은 수량 할인이 적용된 상품 금액에서 추가로 빠집니다.</div></div>
+  <div class="cp-grid">
+    <form id="cf" class="panel" novalidate>
+      <h2>${ed ? '쿠폰 수정' : '새 쿠폰'}</h2>
+      <div class="field"><label>쿠폰 이름<em>*</em></label><input name="name" value="${esc(f0.name)}" placeholder="예) 첫 구매 10% 할인"></div>
+      <div class="field"><label>혜택 종류</label>
+        <div class="seg3">${Object.entries(CP_KIND).map(([k, l]) => `<label><input type="radio" name="kind" value="${k}" ${f0.kind === k ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>
+      <div class="grid2">
+        <div class="field" data-for="amount percent"><label id="vlabel">할인 금액 (원)</label><input name="value" inputmode="numeric" value="${f0.value ?? ''}"></div>
+        <div class="field" data-for="percent"><label>최대 할인 금액 (원)</label><input name="max_discount" inputmode="numeric" value="${f0.max_discount ?? ''}" placeholder="비우면 제한 없음"></div>
+      </div>
+      <div class="field"><label>최소 주문 금액 (원)</label><input name="min_order" inputmode="numeric" value="${f0.min_order || ''}" placeholder="비우면 금액 제한 없음"><span class="hint">수량 할인 적용 후 상품 금액 기준</span></div>
+      <div class="field"><label>사용 방법</label>
+        <div class="seg3">${Object.entries(CP_TARGET).map(([k, l]) => `<label><input type="radio" name="target" value="${k}" ${f0.target === k ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+        <span class="hint" id="thint"></span></div>
+      <div class="field" data-tfor="code all assigned"><label id="clabel">쿠폰 코드</label><input name="code" value="${esc(f0.code)}" placeholder="예) WELCOME10" style="text-transform:uppercase"></div>
+      <div class="field" data-tfor="assigned"><label>지급할 딜러 (승인된 딜러 ${dealers.length}곳)</label>
+        <div class="grant-list">${dealers.length ? dealers.map(d => `<label><input type="checkbox" name="grant" value="${d.id}" ${granted.has(d.id) ? 'checked' : ''}> ${esc(d.company)} ${esc(d.branch || '')} <span class="mut">${esc(d.manager_name)}</span></label>`).join('') : '<span class="mut small">아직 승인된 딜러가 없습니다.</span>'}</div></div>
+      <div class="grid2">
+        <div class="field"><label>시작일</label><input type="date" name="starts_at" value="${dayStr(f0.starts_at)}"></div>
+        <div class="field"><label>종료일</label><input type="date" name="ends_at" value="${dayStr(f0.ends_at)}"></div>
+      </div>
+      <label class="check"><input type="checkbox" name="once_per_dealer" ${f0.once_per_dealer ? 'checked' : ''}> <span>딜러당 1회만 사용</span></label>
+      <label class="check"><input type="checkbox" name="first_order_only" ${f0.first_order_only ? 'checked' : ''}> <span><b>첫 구매 전용</b> — 주문한 적 없는 딜러만 사용</span></label>
+      <div style="display:flex;gap:8px"><button class="btn pri" type="submit">${ed ? '수정 저장' : '쿠폰 만들기'}</button>${ed ? '<button class="btn ghost" type="button" id="cpcancel">취소</button>' : ''}</div>
+    </form>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>쿠폰</th><th>혜택 · 조건</th><th>사용 방법</th><th>기간</th><th class="n">사용</th><th>상태</th><th></th></tr></thead>
+      <tbody>${!A.coupons.length ? '<tr><td colspan="7" class="mut" style="text-align:center;padding:40px">아직 만든 쿠폰이 없습니다.</td></tr>' : A.coupons.map(c => {
+        const n = used(c.id), expired = c.ends_at && new Date(c.ends_at) < new Date();
+        return `<tr class="${c.active && !expired ? '' : 'off'}">
+          <td><b>${esc(c.name)}</b>${c.code ? `<div class="d"><span class="cp-code">${esc(c.code)}</span></div>` : ''}</td>
+          <td>${cpBenefit(c)}<div class="d">${c.min_order ? `${won(c.min_order)}원 이상` : '금액 제한 없음'}${c.first_order_only ? ' · 첫 구매' : ''}${c.once_per_dealer ? ' · 1회' : ''}</div></td>
+          <td>${CP_TARGET[c.target]}${c.target === 'assigned' ? `<div class="d">${(c.coupon_grants || []).length}곳</div>` : ''}</td>
+          <td class="d">${c.starts_at || c.ends_at ? `${dayStr(c.starts_at) || '~'} ~ ${dayStr(c.ends_at) || ''}` : '상시'}</td>
+          <td class="n">${n}회</td>
+          <td>${expired ? '<span class="badge st-cancelled">기간 종료</span>' : c.active ? '<span class="badge st-paid">사용 중</span>' : '<span class="badge st-cancelled">중지</span>'}</td>
+          <td><div class="acts">
+            <button class="btn sm ghost" data-ced="${c.id}">수정</button>
+            <button class="btn sm ghost" data-cact="${c.id}">${c.active ? '중지' : '재개'}</button>
+            ${n ? '' : `<button class="btn sm ghost del-btn" data-cdel="${c.id}">삭제</button>`}
+          </div></td></tr>`;
+      }).join('')}</tbody></table></div>
+  </div>`;
+
+  const f = $('#cf');
+  const sync = () => {
+    const k = f.kind.value, t = f.target.value;
+    $$('[data-for]', f).forEach(el => el.style.display = el.dataset.for.split(' ').includes(k) ? '' : 'none');
+    $$('[data-tfor]', f).forEach(el => el.style.display = el.dataset.tfor.split(' ').includes(t) ? '' : 'none');
+    $('#vlabel').textContent = k === 'percent' ? '할인율 (%)' : '할인 금액 (원)';
+    $('#clabel').innerHTML = t === 'code' ? '쿠폰 코드<em>*</em>' : '쿠폰 코드 <span class="mut" style="font-weight:400">(선택 · 코드로도 입력 가능)</span>';
+    $('#thint').textContent = { code: '코드를 아는 딜러가 주문서에 직접 입력해서 사용합니다. 카톡·공지로 코드를 알려 주세요.',
+      all: '승인된 모든 딜러의 주문서 쿠폰 목록에 자동으로 표시됩니다.', assigned: '아래에서 고른 딜러의 주문서 쿠폰 목록에만 표시됩니다.' }[t];
+  };
+  $$('input[name=kind], input[name=target]', f).forEach(r => r.onchange = sync);
+  sync();
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const num = k => { const v = (f[k].value || '').replace(/[^\d]/g, ''); return v === '' ? null : +v; };
+    const kind = f.kind.value, target = f.target.value, code = f.code.value.trim().toUpperCase() || null;
+    if (!f.name.value.trim()) return toast('쿠폰 이름을 입력해 주세요');
+    if (kind !== 'free_ship' && !num('value')) return toast(kind === 'percent' ? '할인율을 입력해 주세요' : '할인 금액을 입력해 주세요');
+    if (kind === 'percent' && num('value') >= 100) return toast('할인율은 100% 미만이어야 합니다');
+    if (target === 'code' && !code) return toast('코드 입력 방식은 쿠폰 코드가 필요합니다');
+    if (code && A.coupons.some(c => c.code === code && c.id !== A.editCoupon)) return toast('이미 있는 쿠폰 코드입니다');
+    const grants = target === 'assigned' ? $$('input[name=grant]:checked', f).map(x => x.value) : [];
+    if (target === 'assigned' && !grants.length) return toast('지급할 딜러를 한 곳 이상 골라 주세요');
+    const sd = f.starts_at.value, edd = f.ends_at.value;
+    const patch = {
+      name: f.name.value.trim(), code, kind, value: kind === 'free_ship' ? 0 : num('value'),
+      max_discount: kind === 'percent' ? num('max_discount') : null, min_order: num('min_order') || 0, target,
+      once_per_dealer: f.once_per_dealer.checked, first_order_only: f.first_order_only.checked,
+      starts_at: sd ? new Date(sd + 'T00:00:00+09:00').toISOString() : null,
+      ends_at: edd ? new Date(edd + 'T23:59:59+09:00').toISOString() : null,
+    };
+    if (!A.editCoupon) patch.active = true;
+    try { await api.saveCoupon(A.editCoupon, patch, grants); toast(A.editCoupon ? '쿠폰을 수정했습니다' : '쿠폰을 만들었습니다'); A.editCoupon = null; await reload(); viewCoupons(); }
+    catch (err) { toast(/duplicate|unique/i.test(err.message || '') ? '이미 있는 쿠폰 코드입니다' : errMsg(err), 4000); }
+  };
+  $('#cpcancel') && ($('#cpcancel').onclick = () => { A.editCoupon = null; viewCoupons(); });
+  $$('[data-ced]').forEach(b => b.onclick = () => { A.editCoupon = +b.dataset.ced; viewCoupons(); window.scrollTo(0, 0); });
+  $$('[data-cact]').forEach(b => b.onclick = async () => {
+    const c = A.coupons.find(x => x.id === +b.dataset.cact);
+    try { await api.saveCoupon(c.id, { active: !c.active }); await reload(); viewCoupons(); toast(c.active ? '쿠폰을 중지했습니다' : '쿠폰을 다시 사용합니다'); }
+    catch (e) { toast(errMsg(e), 4000); }
+  });
+  $$('[data-cdel]').forEach(b => b.onclick = async () => {
+    const c = A.coupons.find(x => x.id === +b.dataset.cdel);
+    if (!await ask(`'${c.name}' 쿠폰을 삭제할까요?`, { ok: '삭제', danger: true })) return;
+    try { await api.delCoupon(c.id); await reload(); viewCoupons(); toast('쿠폰을 삭제했습니다'); }
+    catch (e) { toast(errMsg(e), 4000); }
+  });
+}
+
 // ---------------------------------------------------------------- 상품 문구 수정
 function editProduct(pid) {
   const p = A.products.find(x => x.id === pid);
@@ -604,6 +744,7 @@ function route() {
   else if (h.startsWith('#/settings')) viewSettings();
   else if (h.startsWith('#/notices')) viewNotices();
   else if (h.startsWith('#/inquiries')) viewInquiriesAdmin();
+  else if (h.startsWith('#/coupons')) viewCoupons();
   else viewOrders();
 }
 

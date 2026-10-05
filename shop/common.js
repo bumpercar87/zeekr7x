@@ -140,7 +140,7 @@ const unitPrice = (price, rate) => Math.floor(price * (100 - rate) / 100 / 10) *
 const tierText = st => tiersOf(st).map(t => `${t.min}개 이상 ${t.rate}%`).join(' · ');
 
 // 견적서 · 거래명세서 (새 창 → 인쇄 / PDF 저장)
-function printDoc({ kind, no, date, to, items, shipping, total, biz, note }) {
+function printDoc({ kind, no, date, to, items, shipping, total, biz, note, coupon }) {
   const w = window.open('', '_blank');
   if (!w) { toast('팝업이 차단되었습니다. 브라우저에서 팝업을 허용해 주세요.', 4000); return; }
   const sub = items.reduce((a, i) => a + i.line_total, 0);
@@ -179,7 +179,8 @@ function printDoc({ kind, no, date, to, items, shipping, total, biz, note }) {
   <table class="it"><thead><tr><th>품목</th><th>옵션</th><th class="n">단가</th><th class="n">수량</th><th class="n">금액</th></tr></thead><tbody>
     ${items.map(i => `<tr><td>${esc(i.product_name)}</td><td>${esc(i.option_name)}</td><td class="n">${won(i.unit_price)}${i.discount_rate ? `<br><small style="color:#e4501f">${i.discount_rate}% 할인</small>` : ''}</td><td class="n">${i.qty}</td><td class="n">${won(i.line_total)}</td></tr>`).join('')}
     <tr><td colspan="4">배송비</td><td class="n">${shipping ? won(shipping) : '무료'}</td></tr>
-  </tbody><tfoot><tr><td colspan="3">합계</td><td class="n">${items.reduce((a, i) => a + i.qty, 0)}</td><td class="n">${won(sub + shipping)}</td></tr></tfoot></table>
+    ${coupon && coupon.discount ? `<tr><td colspan="4">쿠폰 할인 · ${esc(coupon.name || '')}</td><td class="n" style="color:#e4501f">−${won(coupon.discount)}</td></tr>` : ''}
+  </tbody><tfoot><tr><td colspan="3">합계</td><td class="n">${items.reduce((a, i) => a + i.qty, 0)}</td><td class="n">${won(sub + shipping - (coupon?.discount || 0))}</td></tr></tfoot></table>
   ${note ? `<div class="note">${esc(note)}</div>` : ''}
   </div></body></html>`);
   w.document.close();

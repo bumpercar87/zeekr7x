@@ -33,6 +33,14 @@ const api = DEMO ? demoApi() : {
     const { error } = await sb.rpc('cancel_order', { p_order_id: id });
     if (error) throw error;
   },
+  async myCoupons() {
+    const { data, error } = await sb.rpc('my_coupons');
+    if (error) throw error; return data || [];
+  },
+  async checkCoupon(code) {
+    const { data, error } = await sb.rpc('check_coupon', { p_code: code });
+    if (error) throw error; return data;
+  },
   async notifyPaid(id) {
     const { error } = await sb.rpc('notify_paid', { p_order_id: id });
     if (error) throw error;
@@ -115,9 +123,10 @@ function demoApi() {
         items.push({ sku: v.sku, product_name: p.name, option_name: v.option_name, unit_price: u, list_price: v.price, discount_rate: rate, qty: it.qty, line_total: u * it.qty, variant_id: v.id });
       }
       const ship = sub >= settings.free_shipping_over ? 0 : settings.shipping_fee;
+      const cp = a._coupon, cd = cp ? couponDiscount(cp, sub, ship) : 0;
       const d = new Date(), p2 = n => String(n).padStart(2, '0');
       const no = `Z${String(d.getFullYear()).slice(2)}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${String(orders.length + 1).padStart(4, '0')}`;
-      const o = { id: Date.now(), order_no: no, status: 'pending_payment', subtotal: sub, shipping_fee: ship, total: sub + ship, depositor_name: a.p_depositor, orderer_name: a.p_orderer_name, orderer_phone: a.p_orderer_phone, tax_invoice: a.p_tax_invoice, tax_biz_no: a.p_tax_biz_no, tax_email: a.p_tax_email, ship_name: a.p_ship_name, ship_phone: a.p_ship_phone, ship_address: a.p_ship_address, memo: a.p_memo, created_at: d.toISOString(), pay_deadline: new Date(+d + 3 * 864e5).toISOString(), order_items: items };
+      const o = { id: Date.now(), order_no: no, status: 'pending_payment', subtotal: sub, shipping_fee: ship, total: sub + ship - cd, coupon_name: cp?.name, coupon_discount: cd, depositor_name: a.p_depositor, orderer_name: a.p_orderer_name, orderer_phone: a.p_orderer_phone, tax_invoice: a.p_tax_invoice, tax_biz_no: a.p_tax_biz_no, tax_email: a.p_tax_email, ship_name: a.p_ship_name, ship_phone: a.p_ship_phone, ship_address: a.p_ship_address, memo: a.p_memo, created_at: d.toISOString(), pay_deadline: new Date(+d + 3 * 864e5).toISOString(), order_items: items };
       orders.unshift(o); store('zk_demo_orders', orders);
       return { order_id: o.id, order_no: no, total: o.total };
     },
@@ -137,6 +146,8 @@ function demoApi() {
         { id: 3, title: '딜러 주문 사이트 오픈 안내', body: '주문 후 안내된 계좌로 입금해 주시면 확인 후 순차 출고됩니다.', pinned: false, created_at: new Date(t - 6 * 864e5).toISOString() },
       ];
     },
+    async myCoupons() { return orders.length ? [] : [{ id: 1, name: '첫 구매 10% 할인', kind: 'percent', value: 10, max_discount: 30000, min_order: 50000, first_order_only: true }, { id: 2, name: '무료배송 쿠폰', kind: 'free_ship', value: 0, min_order: 0 }]; },
+    async checkCoupon(code) { if (code.toUpperCase() !== 'BRINGGO5000') throw new Error('쿠폰 코드를 확인해 주세요'); return { id: 3, name: '5,000원 할인', kind: 'amount', value: 5000, min_order: 30000 }; },
     async notifyPaid(id) { const o = orders.find(x => x.id === id); o.paid_notified_at = new Date().toISOString(); store('zk_demo_orders', orders); },
     async inquiries() { return store('zk_demo_inq') || []; },
     async addInquiry(row) {
@@ -235,9 +246,11 @@ function viewAuth(tab = 'login') {
   app().innerHTML = `
   <div class="auth-wrap su">
   <div class="auth">
-    <div class="eyebrow">Zeekr 7X · Interior Accessories</div>
+    <div class="eyebrow">Zeekr 7X · Accessories</div>
     <h1>${signup ? '딜러 가입 신청' : '딜러 전용 주문'}</h1>
-    <p class="lead">${signup ? '가입 신청 후 관리자 승인이 완료되면 공급가 확인과 주문이 가능합니다.' : '승인된 딜러 계정으로 로그인하면 공급가 확인과 주문이 가능합니다.'}</p>
+    ${signup
+      ? '<p class="lead">가입 신청 후 승인되면 공급가 확인과 주문이 가능합니다.</p>'
+      : '<p class="lead lead2"><span>처음이신가요? <a href="#" data-tab-link="signup">가입 신청</a> 후 승인되면 이용할 수 있어요.</span><span>승인된 계정으로 로그인하면 공급가 확인과 주문이 가능합니다.</span></p>'}
     <div class="tabs">
       <button data-tab="login" class="${signup ? '' : 'on'}">로그인</button>
       <button data-tab="signup" class="${signup ? 'on' : ''}">가입 신청</button>
@@ -248,6 +261,7 @@ function viewAuth(tab = 'login') {
         <div class="field"><label>딜러사명<em>*</em></label><input name="company" required placeholder="예) ○○모터스"></div>
         <div class="field"><label>지점명</label><input name="branch" placeholder="예) 강남지점"></div>
         <div class="field"><label>담당자 성함<em>*</em></label><input name="manager_name" required></div>
+        <div class="field"><label>직급/직책</label><input name="position" placeholder="예) 매니저, 대리, 지점장"></div>
         <div class="field"><label>휴대폰<em>*</em></label><input name="phone" required inputmode="tel" placeholder="010-0000-0000"></div>
       </div>
       <div class="field"><label>사업자등록번호</label><input name="biz_no" inputmode="numeric" placeholder="000-00-00000"><span class="hint">세금계산서 발행용 (나중에 입력해도 됩니다)</span></div>
@@ -267,6 +281,7 @@ function viewAuth(tab = 'login') {
   </div>`;
 
   $$('.tabs button').forEach(b => b.onclick = () => viewAuth(b.dataset.tab));
+  $$('[data-tab-link]').forEach(a => a.onclick = e => { e.preventDefault(); viewAuth(a.dataset.tabLink); });
   $('#forgot') && ($('#forgot').onclick = e => { e.preventDefault(); viewForgot(); });
   const f = $('#authf');
   if (signup) {
@@ -301,7 +316,7 @@ function viewAuth(tab = 'login') {
     btn.disabled = true;
     try {
       if (signup) {
-        const meta = { company: v('company'), branch: v('branch') || null, manager_name: v('manager_name'), phone: v('phone'), biz_no: v('biz_no') || null, address: addrValue(f) || null };
+        const meta = { company: v('company'), branch: v('branch') || null, manager_name: v('manager_name'), position: v('position') || null, phone: v('phone'), biz_no: v('biz_no') || null, address: addrValue(f) || null };
         const r = await api.signUp(v('email'), v('password'), meta);
         // 이미 가입된 이메일이면 Supabase가 성공처럼 응답하지만 메일은 보내지 않음 (identities 가 비어 있음)
         if (r.user && Array.isArray(r.user.identities) && r.user.identities.length === 0) {
@@ -454,9 +469,7 @@ function viewNotice(title, html, toLogin) {
   <div class="auth"><div class="notice">
     <div class="ic">NOTICE</div><h2>${title}</h2>
     <p class="mut">${html}</p>
-    <div style="display:flex;gap:8px;justify-content:center;margin-top:20px">
-      ${toLogin ? `<button class="btn" id="go">로그인 화면으로</button>` : `<button class="btn" id="re">승인 상태 새로고침</button><button class="btn ghost" data-act="logout">로그아웃</button>`}
-    </div>
+    ${toLogin ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:20px"><button class="btn" id="go">로그인 화면으로</button></div>` : ''}
   </div></div>`;
   $('#go') && ($('#go').onclick = () => viewAuth('login'));
   $('#re') && ($('#re').onclick = () => boot());
@@ -527,7 +540,6 @@ function viewShop() {
 function viewHome() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
   const news = sellable.filter(p => p.is_new).slice(0, 4), bests = sellable.filter(p => p.is_best).slice(0, 4);
-  const last = (S.orders || []).find(o => o.status !== 'cancelled');
   const tiers = tierText(S.settings);
   app().innerHTML = `
   <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}님, 안녕하세요</h1></div>
@@ -540,12 +552,6 @@ function viewHome() {
       <a class="btn sm ghost" href="#/inquiries/new">1:1 문의</a>
     </div>
   </div>
-  ${last ? `
-  <div class="reorder">
-    <div><b>지난 주문 다시 하기</b> <span class="mut small">${esc(last.order_no)} · ${fmtDT(last.created_at).slice(0, 10)}</span>
-      <div class="small">${(last.order_items || []).map(i => `${esc(i.product_name)} ${esc(i.option_name)} ×${i.qty}`).join(', ')}</div></div>
-    <button class="btn sm" data-reorder="${last.id}">그대로 다시 담기</button>
-  </div>` : ''}
   ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
   ${news.length ? `<div class="sec-h"><h2>신규 입고</h2><a href="#/products" data-goto="NEW">신상품 전체 →</a></div><div class="row4">${news.map(productCard).join('')}</div>` : ''}
   ${bests.length ? `<div class="sec-h"><h2>베스트 상품</h2><a href="#/products" data-goto="BEST">베스트 전체 →</a></div><div class="row4">${bests.map(productCard).join('')}</div>` : ''}
@@ -718,6 +724,49 @@ function viewProduct(id) {
   render();
 }
 
+// ---------------------------------------------------------------- 쿠폰
+// DB place_order 와 같은 계산: 정액 / 정률(10원 내림, 최대 할인) / 무료배송(=배송비)
+function couponDiscount(c, sub, ship) {
+  if (!c) return 0;
+  if (c.kind === 'amount') return Math.min(c.value, sub);
+  if (c.kind === 'percent') return Math.min(c.max_discount || Infinity, Math.floor(sub * c.value / 100 / 10) * 10);
+  if (c.kind === 'free_ship') return ship;
+  return 0;
+}
+const couponLabel = c => c.kind === 'amount' ? `${won(c.value)}원 할인` : c.kind === 'percent' ? `${c.value}% 할인${c.max_discount ? `(최대 ${won(c.max_discount)}원)` : ''}` : '배송비 무료';
+
+function couponBox(sub, ship) {
+  const list = S.myCoupons || [], cur = S.coupon;
+  const ok = c => (c.min_order || 0) <= sub;
+  return `
+  <div class="cp-box">
+    <div class="cp-h">쿠폰 ${list.length ? `<span class="mut small">사용 가능 ${list.length}장</span>` : ''}</div>
+    ${cur ? `
+      <div class="cp-on ${ok(cur) ? '' : 'bad'}">
+        <div><b>${esc(cur.name)}</b><div class="small">${couponLabel(cur)}${cur.min_order ? ` · ${won(cur.min_order)}원 이상` : ''}</div>
+          ${ok(cur) ? '' : `<div class="small" style="color:var(--bad)">${won(cur.min_order - sub)}원 더 담아야 쓸 수 있어요</div>`}</div>
+        <button class="rm" id="cpx">빼기</button>
+      </div>
+      ${ok(cur) ? `<div class="row disc-row"><span>쿠폰 할인</span><b>−${won(couponDiscount(cur, sub, ship))}원</b></div>` : ''}` : `
+      ${list.length ? `<select id="cpsel"><option value="">쿠폰 선택</option>${list.map(c => `<option value="${c.id}" ${ok(c) ? '' : 'disabled'}>${esc(c.name)} · ${couponLabel(c)}${ok(c) ? '' : ` (${won(c.min_order)}원 이상)`}</option>`).join('')}</select>` : ''}
+      <div class="cp-code-row"><input id="cpcode" placeholder="쿠폰 코드 입력" autocomplete="off"><button class="btn sm" id="cpapply" type="button">적용</button></div>
+      <div class="err" id="cperr"></div>`}
+  </div>`;
+}
+
+function bindCoupon() {
+  const sel = $('#cpsel'), x = $('#cpx'), ap = $('#cpapply');
+  if (sel) sel.onchange = () => { const c = (S.myCoupons || []).find(c => c.id === +sel.value); if (c) { S.coupon = c; viewCart(); } };
+  if (x) x.onclick = () => { S.coupon = null; viewCart(); };
+  if (ap) ap.onclick = async () => {
+    const code = $('#cpcode').value.trim();
+    if (!code) return $('#cperr').textContent = '쿠폰 코드를 입력해 주세요.';
+    ap.disabled = true;
+    try { const c = await api.checkCoupon(code); S.coupon = { ...c, code: code.toUpperCase() }; toast('쿠폰을 적용했습니다'); viewCart(); }
+    catch (e) { $('#cperr').textContent = errMsg(e); ap.disabled = false; }
+  };
+}
+
 // ---------------------------------------------------------------- 장바구니 / 주문서
 function viewCart() {
   const cart = getCart();
@@ -752,7 +801,10 @@ function viewCart() {
     </div>`;
   }).join('');
   const ship = shippingFor(sub), d = S.dealer, st = S.settings;
+  if (S.myCoupons === undefined) { S.myCoupons = null; api.myCoupons().then(l => { S.myCoupons = l; if (location.hash === '#/cart') viewCart(); }).catch(() => { S.myCoupons = []; }); }
   const need = st.free_shipping_over && ship ? st.free_shipping_over - sub : 0;
+  const cp = S.coupon && (S.coupon.min_order || 0) <= sub ? S.coupon : null;
+  const cdisc = cp ? couponDiscount(cp, sub, ship) : 0;
   // 입력하던 주문서 내용 유지 (수량을 바꿔 화면을 다시 그려도 지워지지 않게)
   const D = S.draft = S.draft || {
     orderer_name: d.manager_name, orderer_phone: d.phone,
@@ -811,9 +863,10 @@ function viewCart() {
       ${listSub > sub ? `<div class="row disc-row"><span>수량 할인</span><b>−${won(listSub - sub)}원</b></div>` : ''}
       <div class="row"><span>배송비</span><b>${ship ? won(ship) + '원' : '무료'}</b></div>
       ${need > 0 ? `<div class="free">${won(need)}원 더 담으면 무료배송</div>` : ''}
-      <div class="row tot"><span>총 입금액</span><b>${won(sub + ship)}원</b></div>
+      ${couponBox(sub, ship)}
+      <div class="row tot"><span>총 입금액</span><b>${won(sub + ship - cdisc)}원</b></div>
       <p class="small mut" style="margin:14px 0">결제 방법 · <b style="color:var(--ink)">무통장 입금</b><br>주문 후 ${st.pay_deadline_days || 3}일 이내 입금해 주세요. 기한이 지나면 자동 취소됩니다.</p>
-      <button class="btn pri block" id="order" ${blocked ? 'disabled' : ''}>${won(sub + ship)}원 주문하기</button>
+      <button class="btn pri block" id="order" ${blocked ? 'disabled' : ''}>${won(sub + ship - cdisc)}원 주문하기</button>
       <div class="err" id="ordererr">${blocked ? '재고·수량을 확인해 주세요.' : ''}</div>
       <button class="btn ghost block" id="quote" style="margin-top:10px">견적서 받기 (인쇄 · PDF)</button>
       ${tierText(st) ? `<p class="small mut" style="margin-top:12px">수량 할인: ${tierText(st)} (같은 상품 옵션 합산)</p>` : ''}
@@ -822,10 +875,11 @@ function viewCart() {
   $('#quote').onclick = () => printDoc({
     kind: '견 적 서', no: '', date: `견적일 ${fmtDT(new Date()).slice(0, 10)} · 유효기간 7일`,
     to: { company: `${d.company}${d.branch ? ' ' + d.branch : ''}`, manager: d.manager_name, phone: d.phone, biz_no: d.biz_no },
-    items: quote, shipping: ship, total: sub + ship, biz: S.info,
+    items: quote, shipping: ship, total: sub + ship - cdisc, biz: S.info, coupon: cp ? { name: cp.name, discount: cdisc } : null,
     note: `· 표시 금액은 부가세 포함 금액입니다.\n· 결제: 무통장 입금 (주문 후 ${st.pay_deadline_days || 3}일 이내)\n· 재고 상황에 따라 수량이 변동될 수 있습니다.`,
   });
 
+  bindCoupon();
   const f = $('#of');
   if (!store && D.c_addr2) f.addr2.value = D.c_addr2;
   if (store && D.addr2) f.addr2.value = D.addr2;
@@ -857,7 +911,8 @@ function viewCart() {
     if (need.some(x => !x)) { err.textContent = '필수 항목(*)을 모두 입력해 주세요.'; return; }
     if (D.tax && (!t(D.tax_biz_no) || !t(D.tax_email))) { err.textContent = '세금계산서용 사업자등록번호와 이메일을 입력해 주세요.'; return; }
     const dest = store ? '기본 배송지' : '다른 주소';
-    if (!await ask(`총 ${won(sub + ship)}원을 주문하시겠습니까?\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: '주문하기' })) return;
+    if (S.coupon && !cp) { err.textContent = `쿠폰 '${S.coupon.name}'은 ${won(S.coupon.min_order)}원 이상 주문 시 쓸 수 있어요. 쿠폰을 빼거나 상품을 더 담아 주세요.`; return; }
+    if (!await ask(`총 ${won(sub + ship - cdisc)}원을 주문하시겠습니까?\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: '주문하기' })) return;
     btn.disabled = true; btn.textContent = '주문 처리 중…'; err.textContent = '';
     try {
       const r = await api.placeOrder({
@@ -866,6 +921,8 @@ function viewCart() {
         p_ship_address: addr, p_memo: [store ? '' : '[다른 주소 배송]', t(D.memo)].filter(Boolean).join(' ') || null,
         p_orderer_name: t(D.orderer_name), p_orderer_phone: t(D.orderer_phone),
         p_tax_invoice: !!D.tax, p_tax_biz_no: D.tax ? t(D.tax_biz_no) : null, p_tax_email: D.tax ? t(D.tax_email) : null,
+        ...(cp ? (cp.code ? { p_coupon_code: cp.code } : { p_coupon_id: cp.id }) : {}),
+        ...(DEMO && cp ? { _coupon: cp } : {}),
       });
       // 기본 배송지 저장 / 비어 있던 사업자번호 채우기
       const patch = {};
@@ -873,7 +930,7 @@ function viewCart() {
       if (D.tax && !S.dealer.biz_no) patch.biz_no = t(D.tax_biz_no);
       if (Object.keys(patch).length) { try { await api.updateMe(patch); Object.assign(S.dealer, patch); } catch (e) {} }
       setCart([]);
-      S.orders = null; S.draft = null;
+      S.orders = null; S.draft = null; S.coupon = null; S.myCoupons = undefined;
       await refreshStock();
       location.hash = '#/done/' + r.order_no;
     } catch (e) {
@@ -896,6 +953,7 @@ function viewMe() {
         <div class="field"><label>딜러사명<em>*</em></label><input name="company" value="${esc(d.company)}"></div>
         <div class="field"><label>지점명</label><input name="branch" value="${esc(d.branch)}"></div>
         <div class="field"><label>담당자 성함<em>*</em></label><input name="manager_name" value="${esc(d.manager_name)}"></div>
+        <div class="field"><label>직급/직책</label><input name="position" value="${esc(d.position)}" placeholder="예) 매니저, 대리, 지점장"></div>
         <div class="field"><label>휴대폰<em>*</em></label><input name="phone" value="${esc(d.phone)}" inputmode="tel"></div>
       </div>
       <div class="field"><label>사업자등록번호</label><input name="biz_no" value="${esc(d.biz_no)}" inputmode="numeric" placeholder="000-00-00000"><span class="hint">세금계산서 요청 시 자동으로 채워집니다.</span></div>
@@ -903,6 +961,8 @@ function viewMe() {
       <div class="field"><label>이메일 (아이디)</label><input value="${esc(d.email)}" disabled></div>
       <button class="btn pri" type="submit">저장</button><div class="err" id="merr"></div>
     </form>
+    <div class="me-side">
+    <div class="panel my-cp" id="mycp"><h2>내 쿠폰</h2><div class="mut small">불러오는 중…</div></div>
     <form id="pf" class="panel" novalidate>
       <h2>비밀번호 변경</h2>
       <div class="field"><label>새 비밀번호</label><input name="pw" type="password" autocomplete="new-password" placeholder="6자 이상"></div>
@@ -912,7 +972,15 @@ function viewMe() {
       ${d.is_admin ? `<a class="btn pri block" href="admin.html" style="margin-bottom:8px">관리자 페이지로 이동</a>` : ''}
       <button class="btn ghost block" type="button" data-act="logout">로그아웃</button>
     </form>
+    </div>
   </div>`;
+  api.myCoupons().then(list => {
+    S.myCoupons = list;
+    const el = $('#mycp'); if (!el) return;
+    el.innerHTML = `<h2>내 쿠폰 <span class="mut small" style="font-weight:400">${list.length}장</span></h2>` + (list.length
+      ? list.map(c => `<div class="cp-item"><b>${esc(c.name)}</b><div class="small">${couponLabel(c)}${c.min_order ? ` · ${won(c.min_order)}원 이상` : ''}${c.first_order_only ? ' · 첫 주문' : ''}</div>${c.ends_at ? `<div class="small mut">${fmtDT(c.ends_at).slice(0, 10)}까지</div>` : ''}</div>`).join('') + '<p class="small mut" style="margin:10px 0 0">주문서의 쿠폰 칸에서 골라 쓰세요.</p>'
+      : '<div class="mut small">사용 가능한 쿠폰이 없습니다. 쿠폰 코드가 있다면 주문서에서 입력하세요.</div>');
+  }).catch(() => { const el = $('#mycp'); if (el) el.remove(); });
   const f = $('#mf');
   f.phone.oninput = () => f.phone.value = fmtPhone(f.phone.value);
   f.biz_no.oninput = () => f.biz_no.value = fmtBiz(f.biz_no.value);
@@ -921,7 +989,7 @@ function viewMe() {
     e.preventDefault();
     const v = k => f[k].value.trim();
     if (!v('company') || !v('manager_name') || !v('phone')) return $('#merr').textContent = '필수 항목(*)을 입력해 주세요.';
-    const patch = { company: v('company'), branch: v('branch') || null, manager_name: v('manager_name'), phone: v('phone'), biz_no: v('biz_no') || null, address: addrValue(f) || null };
+    const patch = { company: v('company'), branch: v('branch') || null, manager_name: v('manager_name'), position: v('position') || null, phone: v('phone'), biz_no: v('biz_no') || null, address: addrValue(f) || null };
     try { await api.updateMe(patch); Object.assign(S.dealer, patch); S.draft = null; renderNav(); toast('내 정보를 저장했습니다'); viewMe(); }
     catch (err) { $('#merr').textContent = errMsg(err); }
   };
@@ -957,6 +1025,7 @@ function bankBox(o) {
 
 const itemsTable = o => `<table class="itbl">${(o.order_items || []).map(it => `<tr><td>${esc(it.product_name)} <span class="mut">· ${esc(it.option_name)}</span></td><td class="n">${it.discount_rate ? `<em class="disc">${it.discount_rate}%</em> ` : ''}${won(it.unit_price)} × ${it.qty}</td><td class="n">${won(it.line_total)}원</td></tr>`).join('')}
   <tr><td class="mut">배송비</td><td></td><td class="n">${o.shipping_fee ? won(o.shipping_fee) + '원' : '무료'}</td></tr>
+  ${o.coupon_discount ? `<tr><td class="mut">쿠폰 · ${esc(o.coupon_name || '')}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.coupon_discount)}원</td></tr>` : ''}
   <tr class="tt"><td>합계</td><td></td><td class="n">${won(o.total)}원</td></tr></table>`;
 
 function printStatement(o, kind = '거 래 명 세 서') {
@@ -965,6 +1034,7 @@ function printStatement(o, kind = '거 래 명 세 서') {
     kind, no: o.order_no, date: `주문일 ${fmtDT(o.created_at).slice(0, 10)}`,
     to: { company: `${d.company}${d.branch ? ' ' + d.branch : ''}`, manager: o.orderer_name || d.manager_name, phone: o.orderer_phone || d.phone, biz_no: o.tax_biz_no || d.biz_no },
     items: o.order_items || [], shipping: o.shipping_fee, total: o.total, biz: S.info,
+    coupon: o.coupon_discount ? { name: o.coupon_name, discount: o.coupon_discount } : null,
     note: `· 표시 금액은 부가세 포함 금액입니다.\n· 받는 분: ${o.ship_name} (${o.ship_phone}) ${o.ship_address}`,
   });
 }
@@ -1157,8 +1227,8 @@ async function boot() {
     S.dealer = await api.dealer(S.user.id);
     renderNav();
     if (!S.dealer) return viewNotice('계정 정보를 찾을 수 없습니다', '관리자에게 문의해 주세요.');
-    if (S.dealer.status === 'pending') return viewNotice('가입 신청이 완료되었습니다', `<b>${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</b> 가입 승인 대기 중입니다.<br>승인이 완료되면 <b>${esc(S.dealer.email)}</b>로 안내 메일을 보내드리며,<br>이후 공급가 확인과 주문이 가능합니다.<br><br><span class="small">급하시면 아래로 연락 주세요.</span>${contactLine()}`);
-    if (S.dealer.status === 'rejected') return viewNotice('가입이 승인되지 않았습니다', `자세한 내용은 아래로 문의해 주세요.${contactLine()}`);
+    if (S.dealer.status === 'pending') return viewNotice('가입 신청이 완료되었습니다', `<b>${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</b> 가입 승인 대기 중입니다.<br>승인이 완료되면 <b>${esc(S.dealer.email)}</b>로 안내 메일을 보내드리며,<br>이후 공급가 확인과 주문이 가능합니다.`);
+    if (S.dealer.status === 'rejected') return viewNotice('가입이 승인되지 않았습니다', '자세한 내용은 관리자에게 문의해 주세요.');
     Object.assign(S, await api.catalog());
     const [ns] = await Promise.allSettled([api.notices(), loadOrders(), loadInquiries()]);
     S.notices = ns.status === 'fulfilled' ? ns.value : [];
