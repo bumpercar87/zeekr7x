@@ -82,3 +82,6 @@
 /* 상품 문구 수정 */
 .pedit{max-width:620px!important;max-height:90vh;overflow:auto}
 @media (max-width:1000px){.set-grid{grid-template-columns:1fr}}
+
+.del-btn{color:var(--bad);border-color:#e9c4c0}
+.del-btn:hover{background:var(--bad);color:#fff;border-color:var(--bad)}

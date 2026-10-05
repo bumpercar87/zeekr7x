@@ -33,6 +33,7 @@ const api = DEMO ? demoAdminApi() : {
   async updVariant(id, patch) { const { error } = await sb.from('variants').update(patch).eq('id', id); if (error) throw error; },
   async updProduct(id, patch) { const { error } = await sb.from('products').update(patch).eq('id', id); if (error) throw error; },
   async updDealer(id, patch) { const { error } = await sb.from('dealers').update(patch).eq('id', id); if (error) throw error; },
+  async delDealer(id) { const { error } = await sb.rpc('admin_delete_dealer', { p_dealer_id: id }); if (error) throw error; },
   async updSettings(patch) { const { error } = await sb.from('shop_settings').update(patch).eq('id', 1); if (error) throw error; },
 };
 
@@ -60,6 +61,10 @@ function demoAdminApi() {
     async updVariant(id, patch) { Object.assign(data.variants.find(x => x.id === id), patch); },
     async updProduct(id, patch) { Object.assign(data.products.find(x => x.id === id), patch); },
     async updDealer(id, patch) { Object.assign(data.dealers.find(x => x.id === id), patch); },
+    async delDealer(id) {
+      if (data.orders.some(o => o.dealer_id === id || (id === 'demo' && o.dealers))) throw new Error('주문 내역이 있는 딜러는 삭제할 수 없습니다. 거래 기록 보관을 위해 [이용 중지]로 처리해 주세요.');
+      data.dealers = data.dealers.filter(x => x.id !== id);
+    },
     async updSettings(patch) { Object.assign(data.settings, patch); },
     async saveNotice(id, patch) {
       if (id) Object.assign(data.notices.find(x => x.id === id), patch);
@@ -371,9 +376,16 @@ function viewDealers() {
         <td><div class="acts">
           ${d.status !== 'approved' ? `<button class="btn sm pri" data-ds="approved" data-id="${d.id}">승인</button>` : ''}
           ${d.status !== 'rejected' ? `<button class="btn sm ghost" data-ds="rejected" data-id="${d.id}">${d.status === 'approved' ? '이용 중지' : '거절'}</button>` : ''}
+          ${n ? '' : `<button class="btn sm ghost del-btn" data-del="${d.id}" title="주문 내역이 없는 계정만 삭제할 수 있어요">삭제</button>`}
         </div></td></tr>`;
     }).join('')}
     </tbody></table></div>`;
+  $$('[data-del]').forEach(b => b.onclick = async () => {
+    const d = A.dealers.find(x => x.id === b.dataset.del);
+    if (!await ask(`${d.company} ${d.branch || ''} (${d.email})\n계정을 완전히 삭제할까요?\n로그인 계정·딜러 정보·문의 내역이 모두 지워지며 되돌릴 수 없습니다.`, { ok: '삭제', danger: true })) return;
+    try { await api.delDealer(d.id); await reload(); viewDealers(); toast('계정을 삭제했습니다'); }
+    catch (e) { toast(errMsg(e), 5000); }
+  });
   $$('[data-ds]').forEach(b => b.onclick = async () => {
     const d = A.dealers.find(x => x.id === b.dataset.id), st = b.dataset.ds;
     if (!await ask(`${d.company} ${d.branch || ''}\n${st === 'approved' ? '승인' : '거절 / 이용 중지'} 하시겠습니까?`, { danger: st !== 'approved' })) return;
