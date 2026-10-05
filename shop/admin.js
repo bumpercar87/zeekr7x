@@ -229,6 +229,7 @@ function orderDetail(o) {
         <input data-tracking placeholder="송장번호" value="${esc(o.tracking_no || '')}">
         <button class="btn sm" data-saveship>저장</button>
       </div>
+      ${o.tracking_no && trackUrl(o.carrier, o.tracking_no) ? `<a class="small" href="${esc(trackUrl(o.carrier, o.tracking_no))}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;text-decoration:underline">${esc(o.carrier || '')} ${esc(o.tracking_no)} 배송 조회 ↗</a>` : ''}
       <textarea data-memo rows="2" placeholder="관리자 메모 (딜러에게 보이지 않음)">${esc(o.admin_memo || '')}</textarea>
       <button class="btn sm ghost" data-savememo style="margin-top:6px">메모 저장</button>
     </div>

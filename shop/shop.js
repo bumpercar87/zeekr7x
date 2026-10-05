@@ -1095,7 +1095,7 @@ async function viewOrders() {
             ${o.tax_invoice ? `<div><span>세금계산서</span>${o.tax_issued ? '발행 완료' : '발행 요청'} · ${esc(o.tax_biz_no || '')}</div>` : ''}
             <div><span>배송지</span>${esc(o.ship_address)}</div>
             ${o.memo ? `<div><span>요청사항</span>${esc(o.memo)}</div>` : ''}
-            ${o.tracking_no ? `<div><span>송장</span>${esc(o.carrier || '')} ${esc(o.tracking_no)}<button class="copy" data-copy="${esc(o.tracking_no)}">복사</button></div>` : ''}
+            ${o.tracking_no ? `<div><span>송장</span>${esc(o.carrier || '')} ${esc(o.tracking_no)}<button class="copy" data-copy="${esc(o.tracking_no)}">복사</button>${trackUrl(o.carrier, o.tracking_no) ? ` <a class="track-btn" href="${esc(trackUrl(o.carrier, o.tracking_no))}" target="_blank" rel="noopener">배송 조회 ↗</a>` : ''}</div>` : ''}
           </div>
           ${o.status === 'pending_payment' ? bankBox(o) : ''}
           <div class="acts">

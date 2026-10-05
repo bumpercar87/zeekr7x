@@ -478,3 +478,6 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
 .cp-on.bad{background:#fff;border-color:var(--hair2)}
 .me-side{display:flex;flex-direction:column;gap:24px}
 .cp-item{border:1px dashed var(--acc);padding:10px 12px;margin-bottom:8px;background:#fff6f2}
+
+.track-btn{display:inline-block;margin-left:6px;font-size:13px;font-weight:700;color:var(--acc);border:1px solid var(--acc);padding:1px 8px}
+.track-btn:hover{background:var(--acc);color:#fff}

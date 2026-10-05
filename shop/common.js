@@ -185,3 +185,19 @@ function printDoc({ kind, no, date, to, items, shipping, total, biz, note, coupo
   </div></body></html>`);
   w.document.close();
 }
+
+// 배송 조회: 택배사별 조회 페이지 (모르는 택배사는 네이버 검색으로)
+const TRACK_URL = {
+  'CJ대한통운': n => `https://trace.cjlogistics.com/next/tracking.html?wblNo=${n}`,
+  '롯데택배': n => `https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=${n}`,
+  '한진택배': n => `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2=${n}`,
+  '우체국택배': n => `https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm?sid1=${n}`,
+  '로젠택배': n => `https://www.ilogen.com/web/personal/trace/${n}`,
+  '경동택배': n => `https://kdexp.com/service/delivery/etc/delivery.do?barcode=${n}`,
+};
+function trackUrl(carrier, no) {
+  const n = String(no || '').replace(/[^0-9A-Za-z]/g, '');
+  if (!n || carrier === '직접배송') return '';
+  const f = TRACK_URL[carrier];
+  return f ? f(n) : `https://search.naver.com/search.naver?query=${encodeURIComponent(`${carrier || ''} 택배조회 ${n}`)}`;
+}
