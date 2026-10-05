@@ -45,6 +45,10 @@ const api = DEMO ? demoApi() : {
     const { error } = await sb.rpc('notify_paid', { p_order_id: id });
     if (error) throw error;
   },
+  async confirmReceived(id) {
+    const { error } = await sb.rpc('confirm_received', { p_order_id: id });
+    if (error) throw error;
+  },
   async inquiries() {
     const { data, error } = await sb.from('inquiries').select('*, orders(order_no)').order('created_at', { ascending: false });
     if (error) throw error; return data;
@@ -149,6 +153,7 @@ function demoApi() {
     async myCoupons() { return orders.length ? [] : [{ id: 1, name: '첫 구매 10% 할인', kind: 'percent', value: 10, max_discount: 30000, min_order: 50000, first_order_only: true }, { id: 2, name: '무료배송 쿠폰', kind: 'free_ship', value: 0, min_order: 0 }]; },
     async checkCoupon(code) { if (code.toUpperCase() !== 'BRINGGO5000') throw new Error('쿠폰 코드를 확인해 주세요'); return { id: 3, name: '5,000원 할인', kind: 'amount', value: 5000, min_order: 30000 }; },
     async notifyPaid(id) { const o = orders.find(x => x.id === id); o.paid_notified_at = new Date().toISOString(); store('zk_demo_orders', orders); },
+    async confirmReceived(id) { const o = orders.find(x => x.id === id); o.status = 'delivered'; o.delivered_by = 'dealer'; o.delivered_at = new Date().toISOString(); store('zk_demo_orders', orders); },
     async inquiries() { return store('zk_demo_inq') || []; },
     async addInquiry(row) {
       const list = store('zk_demo_inq') || [];
@@ -1096,12 +1101,15 @@ async function viewOrders() {
             <div><span>배송지</span>${esc(o.ship_address)}</div>
             ${o.memo ? `<div><span>요청사항</span>${esc(o.memo)}</div>` : ''}
             ${o.tracking_no ? `<div><span>송장</span>${esc(o.carrier || '')} ${esc(o.tracking_no)}<button class="copy" data-copy="${esc(o.tracking_no)}">복사</button>${trackUrl(o.carrier, o.tracking_no) ? ` <a class="track-btn" href="${esc(trackUrl(o.carrier, o.tracking_no))}" target="_blank" rel="noopener">배송 조회 ↗</a>` : ''}</div>` : ''}
+            ${o.status === 'shipped' ? `<div><span>수령 확인</span>배송 시작 ${S.settings.auto_deliver_days || 3}일 후 자동 완료</div>` : ''}
+            ${o.status === 'delivered' && o.delivered_at ? `<div><span>배송완료</span>${fmtDT(o.delivered_at)}${o.delivered_by === 'dealer' ? ' · 수령 확인' : o.delivered_by === 'auto' ? ' · 자동 처리' : ''}</div>` : ''}
           </div>
           ${o.status === 'pending_payment' ? bankBox(o) : ''}
           <div class="acts">
             ${o.status === 'pending_payment' ? (o.paid_notified_at
               ? `<span class="badge st-paid">입금 알림 보냄 · ${fmtDT(o.paid_notified_at).slice(5)}</span>`
               : `<button class="btn pri sm" data-paid="${o.id}">입금했어요</button>`) : ''}
+            ${o.status === 'shipped' ? `<button class="btn pri sm" data-recv="${o.id}">받았어요</button>` : ''}
             ${o.status !== 'cancelled' ? `<button class="btn ghost sm" data-stmt="${o.id}">거래명세서</button>` : ''}
             <button class="btn ghost sm" data-reorder="${o.id}">다시 담기</button>
             ${['shipped', 'delivered'].includes(o.status) ? `<a class="btn ghost sm" href="#/inquiries/new?order=${o.id}&cat=${encodeURIComponent('교환·반품')}">교환·반품 문의</a>` : `<a class="btn ghost sm" href="#/inquiries/new?order=${o.id}">1:1 문의</a>`}
@@ -1122,6 +1130,12 @@ async function viewOrders() {
     if (!await ask('입금하셨나요?\n관리자에게 입금 확인 요청 알림을 보냅니다.', { ok: '알림 보내기' })) return;
     b.disabled = true;
     try { await api.notifyPaid(+b.dataset.paid); toast('입금 확인 요청을 보냈습니다'); viewOrders(); }
+    catch (e) { toast(errMsg(e)); b.disabled = false; }
+  });
+  $$('[data-recv]').forEach(b => b.onclick = async () => {
+    if (!await ask('상품을 받으셨나요?\n배송완료로 변경됩니다.', { ok: '받았어요' })) return;
+    b.disabled = true;
+    try { await api.confirmReceived(+b.dataset.recv); toast('배송완료로 변경했습니다'); viewOrders(); }
     catch (e) { toast(errMsg(e)); b.disabled = false; }
   });
   $$('[data-stmt]').forEach(b => b.onclick = () => printStatement(orders.find(o => o.id === +b.dataset.stmt)));

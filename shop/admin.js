@@ -222,7 +222,7 @@ function orderDetail(o) {
         ${o.memo ? `<dt>요청사항</dt><dd>${esc(o.memo)}</dd>` : ''}
         ${o.tax_invoice ? `<dt>세금계산서</dt><dd><b>발행 요청</b> · ${esc(o.tax_biz_no || '')} · ${esc(o.tax_email || '')}
           <label class="small" style="margin-left:8px"><input type="checkbox" data-taxdone ${o.tax_issued ? 'checked' : ''}> 발행 완료</label></dd>` : ''}
-        <dt>처리 이력</dt><dd class="small">주문 ${fmtDT(o.created_at)}${o.paid_notified_at ? `<br><b style="color:var(--ok)">딜러 입금 알림 ${fmtDT(o.paid_notified_at)}</b>` : ''}${o.paid_at ? `<br>입금확인 ${fmtDT(o.paid_at)}` : ''}${o.shipped_at ? `<br>출고 ${fmtDT(o.shipped_at)}` : ''}${o.delivered_at ? `<br>배송완료 ${fmtDT(o.delivered_at)}` : ''}</dd>
+        <dt>처리 이력</dt><dd class="small">주문 ${fmtDT(o.created_at)}${o.paid_notified_at ? `<br><b style="color:var(--ok)">딜러 입금 알림 ${fmtDT(o.paid_notified_at)}</b>` : ''}${o.paid_at ? `<br>입금확인 ${fmtDT(o.paid_at)}` : ''}${o.shipped_at ? `<br>출고 ${fmtDT(o.shipped_at)}` : ''}${o.delivered_at ? `<br>배송완료 ${fmtDT(o.delivered_at)}${o.delivered_by === 'dealer' ? ' (딜러 수령 확인)' : o.delivered_by === 'auto' ? ' (자동)' : ''}` : ''}</dd>
       </dl>
       <div class="ship">
         <select data-carrier><option value="">택배사</option>${CARRIERS.map(c => `<option ${o.carrier === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
@@ -497,6 +497,7 @@ function viewSettings() {
       <h2 style="margin-top:18px">주문 · 배송</h2>
       <div class="grid2">
         <div class="field"><label>입금 기한 (일)</label><input name="pay_deadline_days" inputmode="numeric" value="${s.pay_deadline_days ?? 3}"><span class="hint">기한이 지나면 자동 취소 · 재고 복원</span></div>
+        <div class="field"><label>자동 배송완료 (일)</label><input name="auto_deliver_days" inputmode="numeric" value="${s.auto_deliver_days ?? 3}"><span class="hint">배송 시작 후 이 기간이 지나면 자동 배송완료 · 딜러가 [받았어요]를 누르면 즉시 완료</span></div>
         <div class="field"><label>배송비 (원)</label><input name="shipping_fee" inputmode="numeric" value="${s.shipping_fee ?? 0}"></div>
       </div>
       <div class="field"><label>무료배송 기준 금액 (원)</label><input name="free_shipping_over" inputmode="numeric" value="${s.free_shipping_over ?? ''}"><span class="hint">비워두면 항상 배송비 부과</span></div>
@@ -530,7 +531,7 @@ function viewSettings() {
     const qty_discounts = [0, 1, 2].map(i => ({ min: n('tmin' + i), rate: n('trate' + i) })).filter(x => x.min && x.rate).sort((a, b) => a.min - b.min);
     if (qty_discounts.some(x => x.rate >= 100)) return toast('할인율은 100% 미만이어야 합니다');
     const patch = { bank_name: t('bank_name'), bank_holder: t('bank_holder'), bank_account: t('bank_account'),
-      pay_deadline_days: n('pay_deadline_days') || 3, shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
+      pay_deadline_days: n('pay_deadline_days') || 3, auto_deliver_days: n('auto_deliver_days') || 3, shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
       notice: t('notice'), ship_info: t('ship_info'), qty_discounts,
       biz_name: t('biz_name'), biz_owner: t('biz_owner'), biz_no: t('biz_no'), mail_order_no: t('mail_order_no'), biz_addr: t('biz_addr'),
       biz_phone: t('biz_phone'), biz_email: t('biz_email'), privacy_officer: t('privacy_officer') };
