@@ -531,12 +531,16 @@ function viewShop() {
       <ul class="cats">${cats.map(c => `<li><button class="${c === S.filter ? 'on' : ''} ${SPECIAL[c] ? 'sp-' + c.toLowerCase() : ''}" data-cat="${esc(c)}"><span>${esc(label(c))}</span><span class="n">${count(c)}</span></button></li>`).join('')}</ul>
       <h4>주문 안내</h4>
       <div class="brief">
-        <div>공급가 <b>VAT 포함</b></div>
-        ${st.free_shipping_over ? `<div><b>${won(st.free_shipping_over)}원 이상</b> 무료배송</div>` : ''}
-        ${st.shipping_fee ? `<div>그 외 배송비 ${won(st.shipping_fee)}원</div>` : ''}
-        ${cutoffText(st.same_day_cutoff) ? `<div><b>${cutoffText(st.same_day_cutoff)}</b> 입금 확인분 당일 출고</div>` : '<div>무통장 입금 확인 후 출고</div>'}
-        <div>입금 기한 <b>주문 후 ${st.pay_deadline_days || 3}일</b></div>
+        <div class="bh">배송비</div>
+        ${st.free_shipping_over ? `<div><b class="acc">${won(st.free_shipping_over)}원 이상</b> 무료배송</div>` : ''}
+        <div>${st.free_shipping_over ? '그 외 ' : ''}${st.shipping_fee ? `${won(st.shipping_fee)}원` : '무료'}</div>
       </div>
+      <div class="brief">
+        <div class="bh">출고</div>
+        ${cutoffText(st.same_day_cutoff) ? `<div><b class="acc">${cutoffText(st.same_day_cutoff)} 이전</b> 입금 확인분<br>당일 출고</div>` : '<div>무통장 입금 확인 후 출고</div>'}
+        <div>입금 기한 주문 후 ${st.pay_deadline_days || 3}일</div>
+      </div>
+      <p class="brief-note">공급가는 VAT 포함입니다</p>
     </aside>
     <div>
       <div class="filters">${cats.map(c => `<button class="chip ${c === S.filter ? 'on' : ''}" data-cat="${esc(c)}">${esc(label(c))}</button>`).join('')}</div>

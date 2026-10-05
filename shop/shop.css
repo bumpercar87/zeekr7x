@@ -483,3 +483,7 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
 
 .track-btn{display:inline-block;margin-left:6px;font-size:13px;font-weight:700;color:var(--acc);border:1px solid var(--acc);padding:1px 8px}
 .track-btn:hover{background:var(--acc);color:#fff}
+.brief + .brief{margin-top:10px}
+.brief .bh{font-size:13px;font-weight:700;color:var(--mut);letter-spacing:.02em;margin-bottom:4px}
+.brief b.acc{color:var(--acc)}
+.brief-note{font-size:13px;color:var(--mut);margin:10px 2px 0}
