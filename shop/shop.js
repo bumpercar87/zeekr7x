@@ -26,7 +26,7 @@ const api = DEMO ? demoApi() : {
     if (error) throw error; return data;
   },
   async orders() {
-    const { data, error } = await sb.from('orders').select('*, order_items(*)').order('created_at', { ascending: false });
+    const { data, error } = await sb.from('orders').select('*, order_items(*)').eq('dealer_id', S.user.id).order('created_at', { ascending: false });
     if (error) throw error; return data;
   },
   async cancel(id) {
@@ -50,7 +50,7 @@ const api = DEMO ? demoApi() : {
     if (error) throw error;
   },
   async inquiries() {
-    const { data, error } = await sb.from('inquiries').select('*, orders(order_no)').order('created_at', { ascending: false });
+    const { data, error } = await sb.from('inquiries').select('*, orders(order_no)').eq('dealer_id', S.user.id).order('created_at', { ascending: false });
     if (error) throw error; return data;
   },
   async addInquiry(row) {
