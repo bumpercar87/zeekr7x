@@ -148,6 +148,8 @@ h2{font-size:18px;margin:0 0 14px;font-weight:700}
 .bank{border:1px solid var(--ink);background:#fff;padding:22px;margin:20px 0}
 .bank dl{display:grid;grid-template-columns:110px 1fr;gap:10px 16px;margin:0;font-size:16px}
 .bank dt{color:var(--mut)}
+.bank .cutoff{margin:16px 0 0;padding-top:14px;border-top:1px dashed var(--line);font-size:15px}
+.bank .cutoff b{color:var(--acc)}
 .bank dd{margin:0;font-weight:600}
 .bank .amt{font-family:var(--disp);font-size:24px;color:var(--acc)}
 .copy{margin-left:8px;border:1px solid var(--hair2);background:none;font-size:13px;padding:1px 8px;border-radius:var(--r);color:var(--mut);font-weight:500}

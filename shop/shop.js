@@ -101,7 +101,7 @@ function demoApi() {
   const mode = new URLSearchParams(location.search).get('demo');
   let orders = store('zk_demo_orders') || [];
   let variants = null;
-  const settings = { bank_name: '○○은행', bank_account: '000-000000-00-000', bank_holder: '브링고', pay_deadline_days: 3, shipping_fee: 3000, free_shipping_over: 100000, notice: '주문 후 3일 이내 입금해 주세요. 기한이 지나면 주문이 자동 취소되고 재고가 복원됩니다.', qty_discounts: [{ min: 30, rate: 5 }, { min: 50, rate: 10 }], ship_info: '출고: 입금 확인 후 1~2영업일 이내\n택배: CJ대한통운\n교환·반품: 수령 후 7일 이내, 미개봉 상품' , biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com' };
+  const settings = { bank_name: '○○은행', bank_account: '000-000000-00-000', bank_holder: '브링고', pay_deadline_days: 3, same_day_cutoff: '15:00', shipping_fee: 3000, free_shipping_over: 100000, notice: '주문 후 3일 이내 입금해 주세요. 기한이 지나면 주문이 자동 취소되고 재고가 복원됩니다.', qty_discounts: [{ min: 30, rate: 5 }, { min: 50, rate: 10 }], ship_info: '출고: 입금 확인 후 1~2영업일 이내\n택배: CJ대한통운\n교환·반품: 수령 후 7일 이내, 미개봉 상품' , biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com' };
   const dealer = { id: 'demo', email: 'demo@dealer.kr', company: '지커 파트너스', branch: '강남점', manager_name: '김딜러', phone: '010-1234-5678', address: '서울 강남구 테헤란로 000', status: mode === 'pending' ? 'pending' : 'approved' };
   return {
     async user() { return mode === 'login' && !store('zk_demo_in') ? null : { id: 'demo', email: dealer.email }; },
@@ -532,7 +532,7 @@ function viewShop() {
         <div>공급가 <b>VAT 포함</b></div>
         ${st.free_shipping_over ? `<div><b>${won(st.free_shipping_over)}원 이상</b> 무료배송</div>` : ''}
         ${st.shipping_fee ? `<div>그 외 배송비 ${won(st.shipping_fee)}원</div>` : ''}
-        <div>무통장 입금 확인 후 출고</div>
+        ${cutoffText(st.same_day_cutoff) ? `<div><b>${cutoffText(st.same_day_cutoff)}</b> 입금 확인분 당일 출고</div>` : '<div>무통장 입금 확인 후 출고</div>'}
         <div>입금 기한 <b>주문 후 ${st.pay_deadline_days || 3}일</b></div>
       </div>
     </aside>
@@ -855,7 +855,7 @@ function viewCart() {
         ${addrField('배송지', D.c_addr1, true)}`}
 
         <h2 class="sec2">입금 정보</h2>
-        <div class="field"><label>입금자명<em>*</em></label><input name="depositor" value="${esc(D.depositor)}"><span class="hint">입금 확인에 사용됩니다. 실제 입금하실 이름과 같게 적어 주세요.</span></div>
+        <div class="field"><label>입금자명<em>*</em></label><input name="depositor" value="${esc(D.depositor)}"><span class="hint">입금 확인에 사용됩니다. 실제 입금하실 이름과 같게 적어 주세요.${cutoffText(S.settings.same_day_cutoff) ? `<br>${cutoffText(S.settings.same_day_cutoff)}까지 입금 확인되면 당일 출고돼요.` : ''}</span></div>
         <label class="check"><input type="checkbox" name="tax" ${D.tax ? 'checked' : ''}> <span><b>세금계산서 발행 요청</b></span></label>
         ${D.tax ? `
         <div class="grid2 taxbox">
@@ -1028,7 +1028,7 @@ function bankBox(o) {
     <dt>예금주</dt><dd>${esc(st.bank_holder)}</dd>
     <dt>입금자명</dt><dd>${esc(o.depositor_name)}</dd>
     <dt>입금 기한</dt><dd>${fmtDT(o.pay_deadline)}까지</dd>
-  </dl></div>`;
+  </dl>${cutoffText(st.same_day_cutoff) ? `<p class="cutoff"><b>${cutoffText(st.same_day_cutoff)}</b>까지 입금 확인되면 <b>당일 출고</b>돼요 <span class="mut">(주말·공휴일 제외)</span></p>` : ''}</div>`;
 }
 
 const itemsTable = o => `<table class="itbl">${(o.order_items || []).map(it => `<tr><td>${esc(it.product_name)} <span class="mut">· ${esc(it.option_name)}</span></td><td class="n">${it.discount_rate ? `<em class="disc">${it.discount_rate}%</em> ` : ''}${won(it.unit_price)} × ${it.qty}</td><td class="n">${won(it.line_total)}원</td></tr>`).join('')}

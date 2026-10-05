@@ -21,6 +21,12 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const won = n => (n ?? 0).toLocaleString('ko-KR');
+// '15:00' → '오후 3시', '14:30' → '오후 2시 30분' (비어 있으면 '')
+function cutoffText(v) {
+  const m = String(v || '').match(/^(\d{1,2}):?(\d{2})?$/); if (!m) return '';
+  const h = +m[1], mi = +(m[2] || 0);
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${mi ? ` ${mi}분` : ''}`;
+}
 // 사진 버전: 사진 파일을 바꾸면 config.js 의 ASSET_V 숫자를 올려 브라우저가 새로 받게 함
 const img = p => !p ? '' : /^https?:/.test(p) ? p : '../' + p + (window.ASSET_V ? '?v=' + window.ASSET_V : '');
 // 목록·썸네일용 작은 사진 (shop/img 아래 사진은 400px _s 버전이 함께 있음)

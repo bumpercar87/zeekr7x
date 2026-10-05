@@ -64,7 +64,7 @@ function demoAdminApi() {
         const products = await (await fetch('demo_products.json', { cache: 'no-store' })).json();
         const variants = await (await fetch('demo_variants.json', { cache: 'no-store' })).json();
         const orders = (store('zk_demo_orders') || []).map(o => ({ ...o, dealers: dealers[0] }));
-        data = { coupons: [{ id: 1, name: '첫 구매 10% 할인', code: 'WELCOME10', kind: 'percent', value: 10, max_discount: 30000, min_order: 50000, target: 'all', once_per_dealer: true, first_order_only: true, starts_at: null, ends_at: null, active: true, created_at: new Date().toISOString(), coupon_grants: [] }], inquiries: (store('zk_demo_inq') || []).map(q => ({ ...q, dealers: dealers[0] })), notices: [{ id: 1, title: '10월 9일 한글날 휴무 안내', body: '10/8(수) 오후 2시 입금 확인분까지 당일 출고됩니다.', pinned: true, active: true, created_at: new Date().toISOString() }], orders, dealers, products, variants, settings: { bank_name: '○○은행', bank_account: '000-000000-00-000', bank_holder: '브링고', pay_deadline_days: 3, shipping_fee: 3000, free_shipping_over: 100000, notice: '주문 후 3일 이내 입금해 주세요.', qty_discounts: [{ min: 30, rate: 5 }, { min: 50, rate: 10 }], biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com', ship_info: '출고: 입금 확인 후 1~2영업일 이내' } };
+        data = { coupons: [{ id: 1, name: '첫 구매 10% 할인', code: 'WELCOME10', kind: 'percent', value: 10, max_discount: 30000, min_order: 50000, target: 'all', once_per_dealer: true, first_order_only: true, starts_at: null, ends_at: null, active: true, created_at: new Date().toISOString(), coupon_grants: [] }], inquiries: (store('zk_demo_inq') || []).map(q => ({ ...q, dealers: dealers[0] })), notices: [{ id: 1, title: '10월 9일 한글날 휴무 안내', body: '10/8(수) 오후 2시 입금 확인분까지 당일 출고됩니다.', pinned: true, active: true, created_at: new Date().toISOString() }], orders, dealers, products, variants, settings: { bank_name: '○○은행', bank_account: '000-000000-00-000', bank_holder: '브링고', pay_deadline_days: 3, same_day_cutoff: '15:00', shipping_fee: 3000, free_shipping_over: 100000, notice: '주문 후 3일 이내 입금해 주세요.', qty_discounts: [{ min: 30, rate: 5 }, { min: 50, rate: 10 }], biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com', ship_info: '출고: 입금 확인 후 1~2영업일 이내' } };
       }
       return data;
     },
@@ -499,6 +499,7 @@ function viewSettings() {
       <div class="grid2">
         <div class="field"><label>입금 기한 (일)</label><input name="pay_deadline_days" inputmode="numeric" value="${s.pay_deadline_days ?? 3}"><span class="hint">기한이 지나면 자동 취소 · 재고 복원</span></div>
         <div class="field"><label>자동 배송완료 (일)</label><input name="auto_deliver_days" inputmode="numeric" value="${s.auto_deliver_days ?? 3}"><span class="hint">배송 시작 후 이 기간이 지나면 자동 배송완료 · 딜러가 [받았어요]를 누르면 즉시 완료</span></div>
+        <div class="field"><label>당일 출고 마감 시각</label><input name="same_day_cutoff" value="${esc(s.same_day_cutoff ?? '15:00')}" placeholder="15:00"><span class="hint">이 시각까지 입금 확인되면 당일 출고 · 비우면 안내 숨김</span></div>
         <div class="field"><label>배송비 (원)</label><input name="shipping_fee" inputmode="numeric" value="${s.shipping_fee ?? 0}"></div>
       </div>
       <div class="field"><label>무료배송 기준 금액 (원)</label><input name="free_shipping_over" inputmode="numeric" value="${s.free_shipping_over ?? ''}"><span class="hint">비워두면 항상 배송비 부과</span></div>
@@ -532,10 +533,11 @@ function viewSettings() {
     const qty_discounts = [0, 1, 2].map(i => ({ min: n('tmin' + i), rate: n('trate' + i) })).filter(x => x.min && x.rate).sort((a, b) => a.min - b.min);
     if (qty_discounts.some(x => x.rate >= 100)) return toast('할인율은 100% 미만이어야 합니다');
     const patch = { bank_name: t('bank_name'), bank_holder: t('bank_holder'), bank_account: t('bank_account'),
-      pay_deadline_days: n('pay_deadline_days') || 3, auto_deliver_days: n('auto_deliver_days') || 3, shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
+      pay_deadline_days: n('pay_deadline_days') || 3, auto_deliver_days: n('auto_deliver_days') || 3, same_day_cutoff: t('same_day_cutoff'), shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
       notice: t('notice'), ship_info: t('ship_info'), qty_discounts,
       biz_name: t('biz_name'), biz_owner: t('biz_owner'), biz_no: t('biz_no'), mail_order_no: t('mail_order_no'), biz_addr: t('biz_addr'),
       biz_phone: t('biz_phone'), biz_email: t('biz_email'), privacy_officer: t('privacy_officer') };
+    if (patch.same_day_cutoff && !cutoffText(patch.same_day_cutoff)) return toast('당일 출고 마감 시각은 15:00 형식으로 적어 주세요');
     try { await api.updSettings(patch); await reload(); viewSettings(); toast('설정을 저장했습니다'); }
     catch (err) { toast(errMsg(err), 4000); }
   };
