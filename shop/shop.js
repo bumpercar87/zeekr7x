@@ -196,7 +196,7 @@ function renderNav() {
     <a href="#/orders" class="${c('#/orders')}">주문내역</a>
     <a href="#/inquiries" class="${c('#/inquiries')}">문의${openInq ? `<span class="cnt">${openInq}</span>` : ''}</a>
     <a href="#/cart" class="${c('#/cart')}">장바구니${n ? `<span class="cnt">${n}</span>` : ''}</a>
-    ${S.dealer.is_admin ? `<a href="admin.html${DEMO ? location.search : ''}" class="pc">관리자</a>` : ''}
+    ${S.dealer.is_admin ? `<a href="admin.html${DEMO ? location.search : ''}" class="admin-link"><span class="pc">관리자</span><span class="mo">관리</span></a>` : ''}
     <a href="#/me" class="who ${c('#/me')}" title="내 정보"><span class="pc">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</span><span class="mo">내 정보</span></a>
     <button data-act="logout" class="pc">로그아웃</button>`;
   kakaoFloat();
@@ -909,6 +909,7 @@ function viewMe() {
       <div class="field"><label>새 비밀번호 확인</label><input name="pw2" type="password" autocomplete="new-password"></div>
       <button class="btn" type="submit">비밀번호 변경</button><div class="err" id="perr"></div>
       <hr style="border:0;border-top:1px solid var(--hair);margin:22px 0 16px">
+      ${d.is_admin ? `<a class="btn pri block" href="admin.html" style="margin-bottom:8px">관리자 페이지로 이동</a>` : ''}
       <button class="btn ghost block" type="button" data-act="logout">로그아웃</button>
     </form>
   </div>`;

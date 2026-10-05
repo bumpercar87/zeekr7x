@@ -460,3 +460,6 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
 /* 홈: 상품 목록과 '전체 상품 보기' 버튼 사이 간격 */
 .home-more{text-align:center;margin:56px 0 72px;padding-top:36px;border-top:1px solid var(--hair)}
 @media (max-width:860px){.home-more{margin:40px 0 56px;padding-top:28px}}
+
+/* 관리자 링크: 휴대폰 메뉴에서도 보이게 */
+@media (max-width:860px){#nav a.admin-link{color:var(--acc);font-weight:700}}

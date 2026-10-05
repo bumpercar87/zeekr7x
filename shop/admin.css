@@ -85,3 +85,27 @@
 
 .del-btn{color:var(--bad);border-color:#e9c4c0}
 .del-btn:hover{background:var(--bad);color:#fff;border-color:var(--bad)}
+
+/* ===== 관리자 화면 휴대폰 정리 ===== */
+@media (max-width:860px){
+  #nav{scrollbar-width:none} #nav::-webkit-scrollbar{display:none}
+  .page-head{flex-wrap:wrap;align-items:flex-start;gap:12px}
+  .page-head > div:first-child{width:100%}
+  .page-head .bar{margin:0}
+  .kpis{grid-template-columns:repeat(3,1fr)!important}
+  .kpi{padding:10px 12px;border-bottom:1px solid var(--hair)}
+  .kpi .v{font-size:22px}
+  .bar input[type=search]{min-width:0;width:100%}
+  .bar input[type=date]{flex:1;min-width:0}
+  /* 주문 목록: 핵심 칸만 (주문번호 · 딜러 · 금액 · 상태) */
+  .tbl.orders-tbl th:nth-child(3),.tbl.orders-tbl td:nth-child(3),
+  .tbl.orders-tbl th:nth-child(5),.tbl.orders-tbl td:nth-child(5),
+  .tbl.orders-tbl th:nth-child(7),.tbl.orders-tbl td:nth-child(7){display:none}
+  .tbl.orders-tbl tr.detail td{display:table-cell}
+  .tbl th,.tbl td{padding:8px 6px}
+  .detail .in{padding:14px 12px}
+  .detail .ship{grid-template-columns:1fr 1fr}
+  .detail .ship button{grid-column:1/-1}
+  .set-grid,.ntc-admin{gap:16px}
+  .flags{justify-content:flex-start}
+}

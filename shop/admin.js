@@ -142,7 +142,7 @@ function viewOrders() {
     <input type="date" id="from" value="${A.f.from}"> ~ <input type="date" id="to" value="${A.f.to}">
     <span class="sp"></span><span class="small mut">${list.length}건 · ${won(sum(list))}원</span>
   </div>
-  <div class="tbl-wrap"><table class="tbl">
+  <div class="tbl-wrap"><table class="tbl orders-tbl">
     <thead><tr><th>주문번호 · 일시</th><th>딜러</th><th>품목</th><th class="n">금액</th><th>입금자</th><th>상태</th><th>입금기한 · 송장</th></tr></thead>
     <tbody>
     ${!list.length ? `<tr><td colspan="7" class="mut" style="text-align:center;padding:40px">해당하는 주문이 없습니다.</td></tr>` : list.map(o => {
