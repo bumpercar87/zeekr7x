@@ -186,6 +186,9 @@ const shippingFor = sub => {
 };
 
 // ---------------------------------------------------------------- 공통 UI
+// 화면에 보이는 이름: 담당자 성함 + 직급 (예: 전지수 매니저)
+const personName = d => esc([d.manager_name || d.company, d.position].filter(Boolean).join(' '));
+
 function renderNav() {
   const nav = $('#nav');
   if (!S.user || S.dealer?.status !== 'approved') {
@@ -208,7 +211,7 @@ function renderNav() {
     <a href="#/inquiries" class="${c('#/inquiries')}">문의${openInq ? `<span class="cnt">${openInq}</span>` : ''}</a>
     <a href="#/cart" class="${c('#/cart')}">장바구니${n ? `<span class="cnt">${n}</span>` : ''}</a>
     ${S.dealer.is_admin ? `<a href="admin.html${DEMO ? location.search : ''}" class="admin-link"><span class="pc">관리자</span><span class="mo">관리</span></a>` : ''}
-    <a href="#/me" class="who ${c('#/me')}" title="내 정보"><span class="pc">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</span><span class="mo">내 정보</span></a>
+    <a href="#/me" class="who ${c('#/me')}" title="${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''} · 내 정보"><span class="pc">${personName(S.dealer)}님</span><span class="mo">내 정보</span></a>
     <button data-act="logout" class="pc">로그아웃</button>`;
   kakaoFloat();
 }
@@ -542,7 +545,7 @@ function viewHome() {
   const news = sellable.filter(p => p.is_new).slice(0, 4), bests = sellable.filter(p => p.is_best).slice(0, 4);
   const tiers = tierText(S.settings);
   app().innerHTML = `
-  <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}님, 안녕하세요</h1></div>
+  <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${personName(S.dealer)}님, 안녕하세요</h1><p class="mut" style="margin:6px 0 0">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</p></div>
   <div id="topboxes">${topBoxes()}</div>
   <div class="help-bar">
     <span class="kk-badge" aria-hidden="true">${KAKAO_ICON}</span>

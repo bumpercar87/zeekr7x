@@ -162,7 +162,7 @@ function viewOrders() {
     <span class="sp"></span><span class="small mut">${list.length}건 · ${won(sum(list))}원</span>
   </div>
   <div class="tbl-wrap"><table class="tbl orders-tbl">
-    <thead><tr><th>주문번호 · 일시</th><th>딜러</th><th>품목</th><th class="n">금액</th><th>입금자</th><th>상태</th><th>입금기한 · 송장</th></tr></thead>
+    <thead><tr><th>주문번호 · 일시</th><th>주문자 · 딜러</th><th>품목</th><th class="n">금액</th><th>입금자</th><th>상태</th><th>입금기한 · 송장</th></tr></thead>
     <tbody>
     ${!list.length ? `<tr><td colspan="7" class="mut" style="text-align:center;padding:40px">해당하는 주문이 없습니다.</td></tr>` : list.map(o => {
       const items = o.order_items || [];
@@ -172,7 +172,7 @@ function viewOrders() {
       return `
       <tr class="main ${open ? 'open' : ''}" data-id="${o.id}">
         <td><div class="no">${esc(o.order_no)}</div><div class="d">${fmtDT(o.created_at)}</div></td>
-        <td>${dealerName(o.dealers)}</td>
+        <td><b>${esc(o.orderer_name || o.dealers?.manager_name || '')}</b><div class="d">${dealerName(o.dealers)}</div></td>
         <td>${items[0] ? esc(items[0].product_name) + (items.length > 1 ? ` <span class="mut">외 ${items.length - 1}건</span>` : '') : ''} <span class="mut">· ${qty}개</span></td>
         <td class="n">${won(o.total)}</td>
         <td>${esc(o.depositor_name)}</td>
