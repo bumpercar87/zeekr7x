@@ -80,11 +80,19 @@ const fmtPhone = v => {
 const fmtBiz = v => v.replace(/\D/g, '').slice(0, 10).replace(/^(\d{0,3})(\d{0,2})(\d{0,5}).*/, (_, a, b, c) => [a, b, c].filter(Boolean).join('-'));
 
 // 주소 입력 (카카오 우편번호 검색)
+// 저장된 한 줄 주소 → [기본 주소, 상세주소]
+// '(06369) 서울 강남구 자곡로11길 11 (디아크리온 강남) 302동 903호' → ['(06369) … 11 (디아크리온 강남)', '302동 903호']
+function splitAddr(v = '') {
+  const m = String(v).match(/^(.*?(?:로|길)\s?\d+(?:-\d+)?(?=\s|$)(?:\s\([^)]*\))?|.*?(?:동|리|가)\s\d+(?:-\d+)?(?=\s|$))\s+(.+)$/);
+  return m && !/^\([^)]*\)$/.test(m[2]) ? [m[1], m[2]] : [v, ''];
+}
+
 function addrField(label, value = '', required = false) {
+  const [a1, a2] = splitAddr(value);
   return `
   <div class="field addr-field"><label>${label}${required ? '<em>*</em>' : ''}</label>
-    <div class="addr-row"><input name="addr1" readonly placeholder="주소 검색을 눌러 주세요" value="${esc(value)}"><button type="button" class="btn sm" data-addr>주소 검색</button></div>
-    <input name="addr2" placeholder="상세주소 (동·호수, 건물명 등)">
+    <div class="addr-row"><input name="addr1" readonly placeholder="주소 검색을 눌러 주세요" value="${esc(a1)}"><button type="button" class="btn sm" data-addr>주소 검색</button></div>
+    <input name="addr2" placeholder="상세주소 (동·호수, 건물명 등)" value="${esc(a2)}">
   </div>`;
 }
 
