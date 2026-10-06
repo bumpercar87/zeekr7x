@@ -5,7 +5,7 @@ window.SUPABASE_KEY = 'sb_publishable_l6S8omqwH-a8jZu94T0Isw_vKEfcD6A';
 window.SHEET_URL = 'https://docs.google.com/spreadsheets/d/19crq_-szVqdJRlVK12RKxgdZ8l34B9xRGuH-TuW368U/edit';
 
 // 카카오톡 채널 채팅 주소 (예: https://pf.kakao.com/_xxxxxx/chat). 비워 두면 문의 버튼이 숨겨집니다.
-window.KAKAO_CHANNEL_URL = '';
+window.KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_vtvxiX/chat';
 
 // 상품 사진 버전 (사진을 교체하면 숫자를 올려 주세요)
 window.ASSET_V = '10053000';
