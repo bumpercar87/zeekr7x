@@ -493,3 +493,67 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
   .m-brief:empty{display:none}
   .m-brief b{color:var(--acc)}
 }
+
+/* ===== 2026-10-06 홈·상품 개편 ===== */
+/* 태그: BEST(검정) → NEW(주황) 순서, 같은 크기. 재고 적음은 가격 아래 글자, 품절은 사진 위 덮개 */
+.card .ph .tags{position:absolute;left:8px;top:8px;display:flex;gap:4px}
+.tagb{font-family:"Pretendard Variable",Pretendard,sans-serif;font-size:12px;font-weight:800;letter-spacing:.04em;padding:3px 7px;line-height:1.2;color:#fff}
+.tagb.best{background:var(--ink)} .tagb.new{background:var(--acc)}
+.pd .cat .tags{display:inline-flex;gap:4px;margin-left:6px;vertical-align:1px}
+.pd .cat .tagb{font-size:11.5px;padding:2px 6px;margin:0}
+.card .soldout{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,20,20,.45);color:#fff;font-weight:800;font-size:16px;letter-spacing:.1em}
+.card .low{font-size:13px;font-weight:700;color:var(--warn);margin-top:4px}
+
+/* 가격: 소비자가(취소선) / 할인율 + 공급가 */
+.card .list{font-size:13.5px;color:var(--dim);margin-top:2px;line-height:1.3}
+.card .list s,.pd .price .list s{text-decoration-thickness:1px}
+.card .price .off,.pd .price .off{font-style:normal;color:var(--acc);margin-right:6px}
+.pd .price{display:block}
+.pd .price .list{font-family:"Pretendard Variable",Pretendard,sans-serif;font-size:15px;font-weight:500;color:var(--dim);margin-bottom:2px}
+.pd .price .now{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pd .price .now .off{font-size:30px;font-weight:800;margin:0}
+
+/* 대표 사진: 가로 스와이프 */
+.gal .main{position:relative}
+.gal .slides{display:flex;width:100%;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.gal .slides::-webkit-scrollbar{display:none}
+.gal .slides img{flex:0 0 100%;width:100%;height:100%;object-fit:cover;scroll-snap-align:start}
+.gal .gcount{position:absolute;right:10px;bottom:10px;background:rgba(20,20,20,.6);color:#fff;font-size:12.5px;padding:3px 9px;border-radius:20px;font-variant-numeric:tabular-nums}
+.gal .gnav{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border:0;border-radius:50%;background:rgba(255,255,255,.85);font-size:24px;line-height:1;cursor:pointer;opacity:0;transition:opacity .15s}
+.gal .gnav.prev{left:10px} .gal .gnav.next{right:10px}
+.gal .main:hover .gnav{opacity:1}
+
+/* 휴대폰 홈 */
+#mhome{display:none}
+.help-mini{display:none}
+@media (max-width:860px){
+  #topboxes,.tier-banner,.help-bar{display:none}
+  #mhome{display:block;margin-top:14px}
+  .roll{background:#fff;border:1px solid var(--ink)}
+  .roll-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+  .roll-track::-webkit-scrollbar{display:none}
+  .roll .ri{flex:0 0 100%;scroll-snap-align:start;display:flex;align-items:center;gap:10px;padding:12px 14px;min-width:0}
+  .roll .rk{flex:none;font-size:12px;font-weight:800;color:var(--acc);border:1px solid var(--acc);padding:1px 6px}
+  .roll .rt{flex:1;min-width:0;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .roll .rt b{color:var(--acc)}
+  .roll-dots{display:flex;justify-content:center;gap:5px;padding:0 0 8px}
+  .roll-dots i{width:5px;height:5px;border-radius:50%;background:var(--hair2)}
+  .roll-dots i.on{background:var(--ink)}
+  .m-ord{display:flex;align-items:center;gap:8px;margin-top:8px;padding:11px 14px;background:#fff6f2;border:1px solid #f2c9b8;font-size:14.5px}
+  .m-ord span:first-child{color:var(--mut);margin-right:2px}
+  .m-ord b{color:var(--acc)} .m-ord i{font-style:normal;color:var(--dim)}
+  .m-ord .go{margin-left:auto;color:var(--mut)}
+  .help-mini{display:block;margin:18px 0 0;font-size:14px;color:var(--mut)}
+  .help-mini a{color:var(--ink);font-weight:700;margin-left:6px}
+  .gal .gnav{display:none}
+  .gal .thumbs{display:none}
+}
+
+/* 내 정보: 바꿀 수 없는 정보 */
+.locked-box{background:var(--wash);border:1px solid var(--hair);padding:14px 16px;margin-bottom:22px}
+.lk-h{font-size:14px;font-weight:800;color:var(--mut);margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.lk-h span{font-weight:400;font-size:13px}
+.lk-h a{text-decoration:underline;color:var(--ink2)}
+.locked-box dl{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;margin:0;font-size:15px}
+.locked-box dt{color:var(--mut)} .locked-box dd{margin:0;color:var(--ink2)}
+.ed-h{font-size:15px;margin:0 0 12px}

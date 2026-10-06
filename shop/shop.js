@@ -492,8 +492,16 @@ function productSummary(p) {
   const min = Math.min(...prices), max = Math.max(...prices);
   const stock = vs.reduce((a, v) => a + v.stock, 0);
   const low = vs.some(v => v.stock > 0 && v.stock <= 5);
-  return { vs, min, max, stock, low };
+  const off = priceOff(vs.find(v => v.price === min));
+  return { vs, min, max, stock, low, off };
 }
+
+// 소비자가(정가·쿠팡가 등) 대비 공급가 할인율. 소비자가가 없거나 더 싸면 표시 안 함
+function priceOff(v) {
+  if (!v || !v.retail_price || v.retail_price <= v.price) return null;
+  return { list: v.retail_price, rate: Math.floor((1 - v.price / v.retail_price) * 100) };
+}
+const tagsHtml = p => `${p.is_best ? '<span class="tagb best">BEST</span>' : ''}${p.is_new ? '<span class="tagb new">NEW</span>' : ''}`;
 
 function productCard(p) {
   const s = productSummary(p);
@@ -501,11 +509,13 @@ function productCard(p) {
   return `
   <a class="card ${s.stock ? '' : 'out'}" href="#/p/${p.id}">
     <div class="ph"><img src="${thumb(p.image)}" alt="" loading="lazy">
-      <span class="tags">${p.is_new ? '<span class="tagb new">NEW</span>' : ''}${p.is_best ? '<span class="tagb best">BEST</span>' : ''}</span>
-      ${!s.stock ? '<span class="badge b-soldout">품절</span>' : s.low ? '<span class="badge b-low">재고 적음</span>' : ''}</div>
+      ${tagsHtml(p) ? `<span class="tags">${tagsHtml(p)}</span>` : ''}
+      ${!s.stock ? '<span class="soldout">품절</span>' : ''}</div>
     <div class="cat">${esc(p.category || '')} · 옵션 ${s.vs.length}</div>
     <h3>${esc(p.name)}</h3>
-    <div class="price">${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>
+    ${s.off ? `<div class="list"><s>${won(s.off.list)}원</s></div>` : ''}
+    <div class="price">${s.off ? `<em class="off">${s.off.rate}%</em>` : ''}${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>
+    ${s.stock && s.low ? '<div class="low">재고 적음</div>' : ''}
     ${s.vs.length > 1 ? `<div class="dots">${s.vs.slice(0, 6).filter(v => v.image).map(v => `<img src="${thumb(v.image)}" alt="" loading="lazy">`).join('')}</div>` : ''}
   </a>`;
 }
@@ -559,6 +569,7 @@ function viewHome() {
   app().innerHTML = `
   <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${personName(S.dealer)}님, 안녕하세요</h1><p class="mut" style="margin:6px 0 0">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</p></div>
   <div id="topboxes">${topBoxes()}</div>
+  <div id="mhome">${mobileHome()}</div>
   <div class="help-bar">
     <span class="kk-badge" aria-hidden="true">${KAKAO_ICON}</span>
     <div class="hb-t"><b>궁금한 점이 있으신가요?</b><span>${window.KAKAO_CHANNEL_URL ? '재고·출고일·호환 여부는 카카오톡으로 빠르게, 교환·반품·대량 견적은 1:1 문의로 남겨 주세요.' : '재고·출고일·호환 여부, 교환·반품·대량 견적 모두 1:1 문의로 남겨 주세요.'}</span></div>
@@ -570,9 +581,11 @@ function viewHome() {
   ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
   ${news.length ? `<div class="sec-h"><h2>신규 입고</h2><a href="#/products" data-goto="NEW">신상품 전체 →</a></div><div class="row4">${news.map(productCard).join('')}</div>` : ''}
   ${bests.length ? `<div class="sec-h"><h2>베스트 상품</h2><a href="#/products" data-goto="BEST">베스트 전체 →</a></div><div class="row4">${bests.map(productCard).join('')}</div>` : ''}
-  <div class="home-more"><a class="btn pri" href="#/products">전체 상품 보기 (${sellable.length})</a></div>`;
+  <div class="home-more"><a class="btn pri" href="#/products" data-goto="전체">전체 상품 보기 (${sellable.length})</a>
+    <p class="help-mini">궁금한 점이 있으신가요? <a href="#/inquiries/new">1:1 문의 →</a>${window.KAKAO_CHANNEL_URL ? ` <a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의 →</a>` : ''}</p></div>`;
   $$('[data-goto]').forEach(a => a.onclick = () => { S.filter = a.dataset.goto; });
   $$('[data-reorder]').forEach(b => b.onclick = () => reorder(+b.dataset.reorder));
+  startRoll();
   if (S.orders === null) loadOrders().then(() => { if ((location.hash || '#/') === '#/') viewHome(); }).catch(() => {});
 }
 
@@ -593,6 +606,39 @@ function reorder(orderId) {
 }
 
 // 상단 두 칸: 공지사항 · 내 주문 현황
+// 휴대폰 홈: 공지·수량할인·출고 안내를 한 줄 롤링(스와이프) + 진행 중 주문만 한 줄
+function mobileHome() {
+  const st = S.settings, tiers = tierText(st), cut = cutoffText(st.same_day_cutoff);
+  const items = [
+    ...S.notices.slice(0, 3).map(n => `<a class="ri" href="#/notices"><span class="rk">${n.pinned ? '필독' : '공지'}</span><span class="rt">${esc(n.title)}</span></a>`),
+    tiers ? `<a class="ri" href="#/products"><span class="rk">할인</span><span class="rt">수량 할인 <b>${tiers}</b> · 같은 상품 옵션 합산</span></a>` : '',
+    cut ? `<a class="ri" href="#/products"><span class="rk">출고</span><span class="rt"><b>${cut} 이전</b> 입금 확인분 당일 출고</span></a>` : '',
+  ].filter(Boolean);
+  const os = S.orders || [];
+  const cnt = st2 => os.filter(o => st2.includes(o.status)).length;
+  const parts = [['입금대기', cnt(['pending_payment'])], ['출고준비', cnt(['paid', 'preparing'])], ['배송중', cnt(['shipped'])]].filter(x => x[1]);
+  return `
+  ${items.length ? `<div class="roll"><div class="roll-track" id="roll">${items.join('')}</div>${items.length > 1 ? `<div class="roll-dots">${items.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}</div>` : ''}
+  ${parts.length ? `<a class="m-ord" href="#/orders"><span>진행 중 주문</span>${parts.map(([k, n]) => `<b>${k} ${n}</b>`).join('<i>·</i>')}<span class="go">→</span></a>` : ''}`;
+}
+
+// 롤링: 4초마다 다음 칸, 손으로 넘기면 그 위치에서 이어감
+function startRoll() {
+  const el = $('#roll');
+  if (!el || el.children.length < 2) return;
+  const dots = $$('.roll-dots i');
+  let hold = 0;
+  const idx = () => Math.round(el.scrollLeft / el.clientWidth);
+  el.addEventListener('scroll', () => dots.forEach((d, i) => d.classList.toggle('on', i === idx())), { passive: true });
+  el.addEventListener('touchstart', () => { hold = Date.now(); }, { passive: true });
+  const t = setInterval(() => {
+    if (!document.body.contains(el)) return clearInterval(t);
+    if (!el.clientWidth || Date.now() - hold < 6000) return;
+    const n = (idx() + 1) % el.children.length;
+    el.scrollTo({ left: n * el.clientWidth, behavior: n ? 'smooth' : 'auto' });
+  }, 4000);
+}
+
 function topBoxes() {
   const n = S.notices[0];
   const os = S.orders || [];
@@ -641,23 +687,30 @@ function viewNotices() {
 function viewProduct(id) {
   const p = product(+id);
   if (!p) return viewShop();
-  const { vs, min, max } = productSummary(p);
+  const { vs, min, max, off } = productSummary(p);
   const picks = [];          // 고른 옵션들 [{ v, qty }]
-  const pics = [...new Set([...(p.images || []), ...vs.map(v => v.image).filter(Boolean)])];
+  const pics = [...new Set([p.image, ...(p.images || []), ...vs.map(v => v.image)].filter(Boolean))];
   const details = p.detail_images || [];
 
   app().innerHTML = `
   <a class="back" href="#/products">← 상품 목록</a>
   <div class="pd">
     <div class="gal">
-      <div class="main"><img id="mainimg" src="${img(p.image)}" alt=""></div>
-      <div class="thumbs">${pics.map(s => `<img src="${thumb(s)}" data-src="${esc(s)}" alt="" loading="lazy">`).join('')}</div>
+      <div class="main">
+        <div class="slides" id="slides">${pics.map((s, i) => `<img src="${img(s)}" alt="" ${i ? 'loading="lazy"' : ''}>`).join('')}</div>
+        ${pics.length > 1 ? `<span class="gcount" id="gcount">1 / ${pics.length}</span>
+        <button class="gnav prev" data-g="-1" aria-label="이전 사진">‹</button><button class="gnav next" data-g="1" aria-label="다음 사진">›</button>` : ''}
+      </div>
+      ${pics.length > 1 ? `<div class="thumbs">${pics.map((s, i) => `<img src="${thumb(s)}" data-i="${i}" class="${i ? '' : 'on'}" alt="" loading="lazy">`).join('')}</div>` : ''}
     </div>
     <div>
-      <div class="cat">${esc(p.category || '')}${p.is_new ? ' <span class="tagb new">NEW</span>' : ''}${p.is_best ? ' <span class="tagb best">BEST</span>' : ''}</div>
+      <div class="cat">${esc(p.category || '')}${tagsHtml(p) ? ` <span class="tags">${tagsHtml(p)}</span>` : ''}</div>
       <h1>${esc(p.name)}</h1>
       <p class="sub">${esc(p.subtitle || '')}</p>
-      <div class="price"><span>${won(min)}원${max > min ? ' ~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}<small>${vs[0]?.retail_price ? `권장 소비자가 ${won(vs[0].retail_price)}원` : ''}</small></div>
+      <div class="price">
+        ${off ? `<div class="list">소비자가 <s>${won(off.list)}원</s></div>` : ''}
+        <div class="now">${off ? `<em class="off">${off.rate}%</em>` : ''}<span>${won(min)}원${max > min ? ' ~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>
+      </div>
       ${tierText(S.settings) ? `<div class="tier-line">수량 할인 <b>${tierText(S.settings)}</b> <span class="mut">(이 상품 옵션 합산)</span></div>` : ''}
       <div class="opt-label"><span>옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span></span></div>
       <div class="opts">${vs.map(v => `
@@ -721,7 +774,7 @@ function viewProduct(id) {
     if (!v.stock) return toast('품절된 옵션입니다');
     if (!avail(v)) return toast('이미 재고만큼 장바구니에 담겨 있습니다');
     if (!picks.some(x => x.v.id === v.id)) picks.push({ v, qty: Math.min(v.min_qty || 1, avail(v)) });
-    if (v.image) $('#mainimg').src = img(v.image);
+    if (v.image) goSlide(pics.indexOf(v.image));
     render();
   };
   const commit = () => {
@@ -731,7 +784,22 @@ function viewProduct(id) {
     return n;
   };
   $$('.opt').forEach(b => b.onclick = () => pick(variant(+b.dataset.v)));
-  $$('.thumbs img').forEach(t => t.onclick = () => { $('#mainimg').src = img(t.dataset.src); $$('.thumbs img').forEach(x => x.classList.toggle('on', x === t)); });
+  // 대표 사진: 스와이프(모바일) · 화살표/썸네일(PC)
+  const sl = $('#slides');
+  let cur = 0;
+  function goSlide(i, smooth = true) {
+    if (i < 0 || i >= pics.length) return;
+    sl.scrollTo({ left: i * sl.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  }
+  sl.addEventListener('scroll', () => {
+    const i = Math.round(sl.scrollLeft / sl.clientWidth);
+    if (i === cur) return;
+    cur = i;
+    if ($('#gcount')) $('#gcount').textContent = `${i + 1} / ${pics.length}`;
+    $$('.thumbs img').forEach(x => x.classList.toggle('on', +x.dataset.i === i));
+  }, { passive: true });
+  $$('.thumbs img').forEach(t => t.onclick = () => goSlide(+t.dataset.i));
+  $$('.gnav').forEach(b => b.onclick = () => goSlide((cur + +b.dataset.g + pics.length) % pics.length));
   $('#add').onclick = $('#madd').onclick = () => { const n = commit(); toast(`${n}개를 장바구니에 담았습니다`); render(); };
   $('#buynow').onclick = () => { commit(); location.hash = '#/cart'; };
   $('#mbuy').onclick = () => { if (!picks.length) return $('.opts').scrollIntoView({ behavior: 'smooth', block: 'center' }); commit(); location.hash = '#/cart'; };
@@ -987,16 +1055,23 @@ function viewMe() {
   <div class="me-grid">
     <form id="mf" class="panel" novalidate>
       <h2>딜러 정보</h2>
+      <div class="locked-box">
+        <div class="lk-h">승인된 사업자 정보 <span>변경이 필요하면 <a href="#/inquiries/new">1:1 문의</a>로 요청해 주세요</span></div>
+        <dl>
+          <dt>딜러사명</dt><dd>${esc(d.company)}</dd>
+          <dt>지점명</dt><dd>${esc(d.branch || '-')}</dd>
+          ${d.biz_no ? `<dt>사업자등록번호</dt><dd>${esc(d.biz_no)}</dd>` : ''}
+          <dt>이메일 (아이디)</dt><dd>${esc(d.email)}</dd>
+        </dl>
+      </div>
+      <h3 class="ed-h">변경 가능한 정보</h3>
       <div class="grid2">
-        <div class="field"><label>딜러사명<em>*</em></label><input name="company" value="${esc(d.company)}"></div>
-        <div class="field"><label>지점명</label><input name="branch" value="${esc(d.branch)}"></div>
         <div class="field"><label>담당자 성함<em>*</em></label><input name="manager_name" value="${esc(d.manager_name)}"></div>
         <div class="field"><label>직급/직책</label><input name="position" value="${esc(d.position)}" placeholder="예) 매니저, 대리, 지점장"></div>
         <div class="field"><label>휴대폰<em>*</em></label><input name="phone" value="${esc(d.phone)}" inputmode="tel"></div>
       </div>
-      <div class="field"><label>사업자등록번호</label><input name="biz_no" value="${esc(d.biz_no)}" inputmode="numeric" placeholder="000-00-00000"><span class="hint">세금계산서 요청 시 자동으로 채워집니다.</span></div>
+      ${d.biz_no ? '' : `<div class="field"><label>사업자등록번호</label><input name="biz_no" value="" inputmode="numeric" placeholder="000-00-00000"><span class="hint">한 번 입력하면 이후에는 1:1 문의로만 바꿀 수 있어요. 세금계산서 요청 시 자동으로 채워집니다.</span></div>`}
       ${addrField('기본 배송지', d.address || '')}
-      <div class="field"><label>이메일 (아이디)</label><input value="${esc(d.email)}" disabled></div>
       <button class="btn pri" type="submit">저장</button><div class="err" id="merr"></div>
     </form>
     <div class="me-side">
@@ -1021,13 +1096,14 @@ function viewMe() {
   }).catch(() => { const el = $('#mycp'); if (el) el.remove(); });
   const f = $('#mf');
   f.phone.oninput = () => f.phone.value = fmtPhone(f.phone.value);
-  f.biz_no.oninput = () => f.biz_no.value = fmtBiz(f.biz_no.value);
+  if (f.biz_no) f.biz_no.oninput = () => f.biz_no.value = fmtBiz(f.biz_no.value);
   bindAddr(f);
   f.onsubmit = async e => {
     e.preventDefault();
     const v = k => f[k].value.trim();
-    if (!v('company') || !v('manager_name') || !v('phone')) return $('#merr').textContent = '필수 항목(*)을 입력해 주세요.';
-    const patch = { company: v('company'), branch: v('branch') || null, manager_name: v('manager_name'), position: v('position') || null, phone: v('phone'), biz_no: v('biz_no') || null, address: addrValue(f) || null };
+    if (!v('manager_name') || !v('phone')) return $('#merr').textContent = '필수 항목(*)을 입력해 주세요.';
+    const patch = { manager_name: v('manager_name'), position: v('position') || null, phone: v('phone'), address: addrValue(f) || null };
+    if (f.biz_no && v('biz_no')) patch.biz_no = v('biz_no');
     try { await api.updateMe(patch); Object.assign(S.dealer, patch); S.draft = null; renderNav(); toast('내 정보를 저장했습니다'); viewMe(); }
     catch (err) { $('#merr').textContent = errMsg(err); }
   };

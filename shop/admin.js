@@ -411,6 +411,7 @@ function viewDealers() {
         <td><div class="acts">
           ${d.status !== 'approved' ? `<button class="btn sm pri" data-ds="approved" data-id="${d.id}">승인</button>` : ''}
           ${d.status !== 'rejected' ? `<button class="btn sm ghost" data-ds="rejected" data-id="${d.id}">${d.status === 'approved' ? '이용 중지' : '거절'}</button>` : ''}
+          <button class="btn sm ghost" data-dedit="${d.id}">정보 수정</button>
           ${n ? '' : `<button class="btn sm ghost del-btn" data-del="${d.id}" title="주문 내역이 없는 계정만 삭제할 수 있어요">삭제</button>`}
         </div></td></tr>`;
     }).join('')}
@@ -421,6 +422,7 @@ function viewDealers() {
     try { await api.delDealer(d.id); await reload(); viewDealers(); toast('계정을 삭제했습니다'); }
     catch (e) { toast(errMsg(e), 5000); }
   });
+  $$('[data-dedit]').forEach(b => b.onclick = () => editDealer(b.dataset.dedit));
   $$('[data-ds]').forEach(b => b.onclick = async () => {
     const d = A.dealers.find(x => x.id === b.dataset.id), st = b.dataset.ds;
     if (!await ask(`${d.company} ${d.branch || ''}\n${st === 'approved' ? '승인' : '거절 / 이용 중지'} 하시겠습니까?`, { danger: st !== 'approved' })) return;
@@ -694,6 +696,40 @@ function viewCoupons() {
 }
 
 // ---------------------------------------------------------------- 상품 문구 수정
+// 딜러 정보 수정 (딜러사명·지점명·사업자번호는 딜러가 직접 못 바꿔서 1:1 문의로 요청받아 여기서 변경)
+function editDealer(id) {
+  const d = A.dealers.find(x => x.id === id);
+  const ov = document.createElement('div');
+  ov.className = 'ask-ov';
+  ov.innerHTML = `<form class="ask pedit" novalidate>
+    <h2 style="margin-top:0">${esc(d.company)} · 정보 수정</h2>
+    <div class="grid2">
+      <div class="field"><label>딜러사명</label><input name="company" value="${esc(d.company)}"></div>
+      <div class="field"><label>지점명</label><input name="branch" value="${esc(d.branch)}"></div>
+      <div class="field"><label>담당자 성함</label><input name="manager_name" value="${esc(d.manager_name)}"></div>
+      <div class="field"><label>직급/직책</label><input name="position" value="${esc(d.position)}"></div>
+      <div class="field"><label>휴대폰</label><input name="phone" value="${esc(d.phone)}"></div>
+      <div class="field"><label>사업자등록번호</label><input name="biz_no" value="${esc(d.biz_no)}"></div>
+    </div>
+    <div class="field"><label>기본 배송지</label><input name="address" value="${esc(d.address)}"></div>
+    <p class="small mut">이메일(아이디)은 바꿀 수 없습니다.</p>
+    <div class="ask-btns"><button type="button" class="btn ghost" data-x>취소</button><button class="btn pri">저장</button></div>
+  </form>`;
+  document.body.appendChild(ov);
+  const f = $('form', ov);
+  f.phone.oninput = () => f.phone.value = fmtPhone(f.phone.value);
+  f.biz_no.oninput = () => f.biz_no.value = fmtBiz(f.biz_no.value);
+  $('[data-x]', ov).onclick = () => ov.remove();
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const t = k => f[k].value.trim() || null;
+    if (!t('company') || !t('manager_name') || !t('phone')) return toast('딜러사명·담당자·휴대폰은 비울 수 없습니다');
+    const patch = { company: t('company'), branch: t('branch'), manager_name: t('manager_name'), position: t('position'), phone: t('phone'), biz_no: t('biz_no'), address: t('address') };
+    try { await api.updDealer(id, patch); ov.remove(); await reload(); viewDealers(); toast('딜러 정보를 저장했습니다'); }
+    catch (err) { toast(errMsg(err), 4000); }
+  };
+}
+
 function editProduct(pid) {
   const p = A.products.find(x => x.id === pid);
   const ov = document.createElement('div');
