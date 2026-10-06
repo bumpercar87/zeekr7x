@@ -392,13 +392,13 @@ label.bad{outline:1px solid var(--bad);padding:6px}
   .intro-grid{grid-template-columns:repeat(4,1fr);gap:6px}
   .row4{grid-template-columns:repeat(2,1fr);gap:16px 12px}
   .reorder{flex-direction:column;align-items:flex-start}
-  .mbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:80;background:#fff;border-top:1px solid var(--ink);padding:10px 14px calc(10px + env(safe-area-inset-bottom));gap:8px;align-items:center}
+  .mbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:80;background:#fff;border-top:1px solid var(--ink);padding:10px 14px calc(10px + env(safe-area-inset-bottom));gap:8px;align-items:center}
   .mbar .mt{flex:1;display:flex;flex-direction:column;font-size:14px}
   .mbar .mt b{font-size:17px}
   .mbar .mt small{color:var(--mut)}
   .mbar .btn{padding:10px 14px}
-  body:has(.mbar) #kakao-float{bottom:84px}
-  body:has(.mbar) #foot{padding-bottom:110px}
+  .mbar.show{display:flex}
+  body:has(.mbar.show) #foot{padding-bottom:110px}
   .pd .buy{display:none}
 
   .me-grid{grid-template-columns:1fr}

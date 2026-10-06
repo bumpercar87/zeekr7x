@@ -738,6 +738,7 @@ function viewProduct(id) {
     $('#ptotal').innerHTML = picks.length
       ? `<span>총 수량 <b class="num">${n}</b>개${rate ? ` <em class="disc">${rate}% 할인 적용</em>` : next ? ` <span class="mut small">· ${next.min - pq}개 더 담으면 ${next.rate}% 할인</span>` : ''}</span><span class="tp">${won(sum)}<small>원</small></span>`
       : '<span class="mut">위에서 옵션을 골라 주세요.</span>';
+    $('#mbar').classList.toggle('show', picks.length > 0);   // 휴대폰 하단 주문 바: 옵션을 고른 뒤에만
     $('#mtotal').innerHTML = picks.length ? `<b class="num">${won(sum)}원</b><small>${n}개${rate ? ` · ${rate}% 할인` : ''}</small>` : '<small>옵션을 골라 주세요</small>';
     $('#add').disabled = $('#buynow').disabled = !picks.length;
     $('#madd').disabled = !picks.length;
