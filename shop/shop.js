@@ -220,20 +220,11 @@ function renderNav() {
     ${S.dealer.is_admin ? `<a href="admin.html${DEMO ? location.search : ''}" class="admin-link"><span class="pc">관리자</span><span class="mo">관리</span></a>` : ''}
     <a href="#/me" class="who ${c('#/me')}" title="${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''} · 내 정보"><span class="pc">${personName(S.dealer)}님</span><span class="mo">내 정보</span></a>
     <button data-act="logout" class="pc">로그아웃</button>`;
-  kakaoFloat();
 }
 
 // 말풍선 아이콘 (카카오톡 노란색 톤)
 const KAKAO_ICON = '<svg class="kk-svg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#191600" d="M12 3.5c-5 0-9 3.1-9 7 0 2.5 1.7 4.7 4.2 5.9l-.9 3.3c-.1.3.3.6.6.4l3.9-2.6c.4 0 .8.1 1.2.1 5 0 9-3.1 9-7s-4-7.1-9-7.1z"/></svg>';
 
-// 카카오톡 채널 채팅 버튼 (config.js 의 KAKAO_CHANNEL_URL 이 있을 때만)
-function kakaoFloat() {
-  if (!window.KAKAO_CHANNEL_URL || $('#kakao-float')) return;
-  const a = document.createElement('a');
-  a.id = 'kakao-float'; a.href = window.KAKAO_CHANNEL_URL; a.target = '_blank'; a.rel = 'noopener';
-  a.innerHTML = KAKAO_ICON + '<span>카카오톡 문의</span>';
-  document.body.appendChild(a);
-}
 
 document.addEventListener('click', async e => {
   if (e.target.closest('[data-act="logout"]')) {
@@ -492,15 +483,9 @@ function productSummary(p) {
   const min = Math.min(...prices), max = Math.max(...prices);
   const stock = vs.reduce((a, v) => a + v.stock, 0);
   const low = vs.some(v => v.stock > 0 && v.stock <= 5);
-  const off = priceOff(vs.find(v => v.price === min));
-  return { vs, min, max, stock, low, off };
+  return { vs, min, max, stock, low };
 }
 
-// 소비자가(정가·쿠팡가 등) 대비 공급가 할인율. 소비자가가 없거나 더 싸면 표시 안 함
-function priceOff(v) {
-  if (!v || !v.retail_price || v.retail_price <= v.price) return null;
-  return { list: v.retail_price, rate: Math.floor((1 - v.price / v.retail_price) * 100) };
-}
 const tagsHtml = p => `${p.is_best ? '<span class="tagb best">BEST</span>' : ''}${p.is_new ? '<span class="tagb new">NEW</span>' : ''}`;
 
 function productCard(p) {
@@ -513,8 +498,7 @@ function productCard(p) {
       ${!s.stock ? '<span class="soldout">품절</span>' : ''}</div>
     <div class="cat">${esc(p.category || '')} · 옵션 ${s.vs.length}</div>
     <h3>${esc(p.name)}</h3>
-    ${s.off ? `<div class="list"><s>${won(s.off.list)}원</s></div>` : ''}
-    <div class="price">${s.off ? `<em class="off">${s.off.rate}%</em>` : ''}${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>
+    <div class="price">${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>
     ${s.stock && s.low ? '<div class="low">재고 적음</div>' : ''}
     ${s.vs.length > 1 ? `<div class="dots">${s.vs.slice(0, 6).filter(v => v.image).map(v => `<img src="${thumb(v.image)}" alt="" loading="lazy">`).join('')}</div>` : ''}
   </a>`;
@@ -687,7 +671,7 @@ function viewNotices() {
 function viewProduct(id) {
   const p = product(+id);
   if (!p) return viewShop();
-  const { vs, min, max, off } = productSummary(p);
+  const { vs, min, max } = productSummary(p);
   const picks = [];          // 고른 옵션들 [{ v, qty }]
   const pics = [...new Set([p.image, ...(p.images || []), ...vs.map(v => v.image)].filter(Boolean))];
   const details = p.detail_images || [];
@@ -707,10 +691,7 @@ function viewProduct(id) {
       <div class="cat">${esc(p.category || '')}${tagsHtml(p) ? ` <span class="tags">${tagsHtml(p)}</span>` : ''}</div>
       <h1>${esc(p.name)}</h1>
       <p class="sub">${esc(p.subtitle || '')}</p>
-      <div class="price">
-        ${off ? `<div class="list">소비자가 <s>${won(off.list)}원</s></div>` : ''}
-        <div class="now">${off ? `<em class="off">${off.rate}%</em>` : ''}<span>${won(min)}원${max > min ? ' ~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>
-      </div>
+      <div class="price"><span>${won(min)}원${max > min ? ' ~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}<small>${vs[0]?.retail_price ? `권장 소비자가 ${won(vs[0].retail_price)}원` : ''}</small></div>
       ${tierText(S.settings) ? `<div class="tier-line">수량 할인 <b>${tierText(S.settings)}</b> <span class="mut">(이 상품 옵션 합산)</span></div>` : ''}
       <div class="opt-label"><span>옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span></span></div>
       <div class="opts">${vs.map(v => `
@@ -1264,11 +1245,11 @@ async function viewInquiries() {
   renderNav();
   app().innerHTML = `
   <div class="page-head"><div><div class="eyebrow">Inquiry · ${list.length}</div><h1>1:1 문의</h1></div>
-    <a class="btn pri" href="#/inquiries/new">새 문의 작성</a></div>
-  <div class="inq-guide">
-    <div><b>빠른 질문</b> (재고, 출고일, 호환 여부)은 ${window.KAKAO_CHANNEL_URL ? `<a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener" class="kk-link">카카오톡 채팅</a>이 가장 빨라요.` : '카카오톡 채팅이 가장 빨라요.'}</div>
-    <div><b>교환·반품·불량, 대량 견적, 세금계산서</b>처럼 기록이 필요한 문의는 여기에 남겨 주세요. 답변이 달리면 메일로 알려 드립니다.</div>
-  </div>
+    <div class="inq-acts">${window.KAKAO_CHANNEL_URL ? `<a class="btn kakao-btn" href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">${KAKAO_ICON}카카오톡 문의</a>` : ''}<a class="btn pri" href="#/inquiries/new">새 문의 작성</a></div></div>
+  <ul class="inq-guide">
+    ${window.KAKAO_CHANNEL_URL ? '<li><b>빠른 질문</b>(재고, 출고일, 호환 여부)은 <b>카카오톡 채팅</b>이 가장 빨라요.</li>' : ''}
+    <li><b>교환·반품·불량, 대량 견적, 세금계산서</b>처럼 기록이 필요한 문의는 [새 문의 작성]으로 남겨 주세요. 답변이 달리면 메일로 알려 드립니다.</li>
+  </ul>
   ${!list.length ? '<div class="empty">아직 문의 내역이 없습니다.</div>' : `
   <div class="notices">${list.map((q, i) => `
     <details class="ntc" ${i === 0 ? 'open' : ''}>

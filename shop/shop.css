@@ -504,15 +504,6 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
 .card .soldout{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,20,20,.45);color:#fff;font-weight:800;font-size:16px;letter-spacing:.1em}
 .card .low{font-size:13px;font-weight:700;color:var(--warn);margin-top:4px}
 
-/* 가격: 소비자가(취소선) / 할인율 + 공급가 */
-.card .list{font-size:13.5px;color:var(--dim);margin-top:2px;line-height:1.3}
-.card .list s,.pd .price .list s{text-decoration-thickness:1px}
-.card .price .off,.pd .price .off{font-style:normal;color:var(--acc);margin-right:6px}
-.pd .price{display:block}
-.pd .price .list{font-family:"Pretendard Variable",Pretendard,sans-serif;font-size:15px;font-weight:500;color:var(--dim);margin-bottom:2px}
-.pd .price .now{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.pd .price .now .off{font-size:30px;font-weight:800;margin:0}
-
 /* 대표 사진: 가로 스와이프 */
 .gal .main{position:relative}
 .gal .slides{display:flex;width:100%;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
@@ -557,3 +548,17 @@ body{font-size:16px;line-height:1.65;letter-spacing:-.005em}
 .locked-box dl{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;margin:0;font-size:15px}
 .locked-box dt{color:var(--mut)} .locked-box dd{margin:0;color:var(--ink2)}
 .ed-h{font-size:15px;margin:0 0 12px}
+
+/* 1:1 문의: 카카오톡 문의 + 새 문의 작성 버튼, 안내 목록 */
+.inq-acts{display:flex;gap:8px;flex-wrap:wrap}
+.inq-acts .kakao-btn{display:inline-flex;align-items:center;gap:6px}
+ul.inq-guide{list-style:none;margin:0 0 22px;padding:14px 18px}
+ul.inq-guide li{position:relative;padding-left:14px;margin:2px 0}
+ul.inq-guide li::before{content:"·";position:absolute;left:2px;top:0;font-weight:800}
+ul.inq-guide b{color:var(--ink)}
+@media (max-width:860px){
+  .page-head:has(.inq-acts){flex-wrap:wrap;align-items:flex-start}
+  .inq-acts{width:100%}
+  .inq-acts .btn{flex:1;justify-content:center}
+  ul.inq-guide{padding:12px 14px;font-size:14px;line-height:1.65}
+}
