@@ -709,7 +709,6 @@ function viewProduct(id) {
       <ul class="feats">${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       ${p.info ? `<table class="pinfo">${p.info.split('\n').filter(Boolean).map(l => { const [k, ...r] = l.split(':'); return r.length ? `<tr><th>${esc(k.trim())}</th><td>${esc(r.join(':').trim())}</td></tr>` : `<tr><td colspan="2">${esc(l)}</td></tr>`; }).join('')}</table>` : ''}
       ${S.settings.ship_info ? `<div class="shipinfo"><b>배송 · 교환 안내</b><div>${esc(S.settings.ship_info)}</div></div>` : ''}
-      ${window.KAKAO_CHANNEL_URL ? `<p style="margin-top:16px"><a class="btn ghost sm kakao-btn" href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">이 상품 카카오톡으로 문의하기</a></p>` : ''}
     </div>
   </div>
   ${details.length ? `
