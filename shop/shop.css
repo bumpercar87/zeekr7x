@@ -562,3 +562,8 @@ ul.inq-guide b{color:var(--ink)}
   .inq-acts .btn{flex:1;justify-content:center}
   ul.inq-guide{padding:12px 14px;font-size:14px;line-height:1.65}
 }
+
+/* 상품 상세 가격 줄: 가격은 한 줄로, 단위 안내는 옆(좁으면 아래 줄) */
+.pd .price{flex-wrap:wrap;align-items:center;row-gap:8px}
+.pd .price > span:first-child{white-space:nowrap}
+.pd .price .unit{white-space:nowrap}

@@ -691,7 +691,7 @@ function viewProduct(id) {
       <div class="cat">${esc(p.category || '')}${tagsHtml(p) ? ` <span class="tags">${tagsHtml(p)}</span>` : ''}</div>
       <h1>${esc(p.name)}</h1>
       <p class="sub">${esc(p.subtitle || '')}</p>
-      <div class="price"><span>${won(min)}원${max > min ? ' ~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}<small>${vs[0]?.retail_price ? `권장 소비자가 ${won(vs[0].retail_price)}원` : ''}</small></div>
+      <div class="price"><span>${won(min)}원${max > min ? '~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>
       ${tierText(S.settings) ? `<div class="tier-line">수량 할인 <b>${tierText(S.settings)}</b> <span class="mut">(이 상품 옵션 합산)</span></div>` : ''}
       <div class="opt-label"><span>옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span></span></div>
       <div class="opts">${vs.map(v => `
