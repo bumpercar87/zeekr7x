@@ -57,6 +57,15 @@ const api = DEMO ? demoApi() : {
     const { error } = await sb.from('inquiries').insert(row);
     if (error) throw error;
   },
+  // 비회원 둘러보기: 상품 + 옵션 이름·사진 (가격·재고 없음)
+  async publicCatalog() {
+    const [p, v] = await Promise.all([
+      sb.from('products').select('*').eq('active', true).order('sort'),
+      sb.rpc('public_options'),
+    ]);
+    for (const r of [p, v]) if (r.error) throw r.error;
+    return { products: p.data || [], variants: v.data || [] };
+  },
   async publicProducts() {
     const { data } = await sb.from('products').select('id,name,image,category').eq('active', true).order('sort');
     return data || [];
@@ -162,6 +171,11 @@ function demoApi() {
       store('zk_demo_inq', list);
     },
     async publicProducts() { return (await (await fetch('demo_products.json', { cache: 'no-store' })).json()); },
+    async publicCatalog() {
+      const products = await (await fetch('demo_products.json', { cache: 'no-store' })).json();
+      const vs = await (await fetch('demo_variants.json', { cache: 'no-store' })).json();
+      return { products, variants: vs.map(({ id, product_id, option_name, image, sort }) => ({ id, product_id, option_name, image, sort })) };
+    },
     async publicInfo() { return { biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com' }; },
     async signIn() { store('zk_demo_in', 1); },
     async signUp() { return { session: null }; },
@@ -196,6 +210,10 @@ const personName = d => esc([d.manager_name || d.company, d.position].filter(Boo
 
 function renderNav() {
   const nav = $('#nav');
+  if (!S.user && S.guest) {
+    nav.innerHTML = `<a href="#/products" class="on">상품 둘러보기</a><a href="#/login">로그인</a><a href="#/signup" class="nav-cta">가입 신청</a>`;
+    return;
+  }
   if (!S.user || S.dealer?.status !== 'approved') {
     nav.innerHTML = S.user ? `<button data-act="logout">로그아웃</button>` : '';
     return;
@@ -242,6 +260,13 @@ document.addEventListener('click', async e => {
 const app = () => $('#app');
 
 // ---------------------------------------------------------------- 로그인 / 가입
+// 가입 신청: 딜러사·지점 선택 (기타 → 직접 입력)
+const DEALER_COS = ['ZK모빌리티', 'KCC모빌리티', '에이치모빌리티ZK', '아이언EV', '기타'];
+const BRANCHES = ['강남', '강동', '동대문', '광주', '서초', '강서', '일산', '대전', '원주', '판교', '인천', '수원', '부산', '기타'];
+const pickField = (name, list, ph, etcPh) => `
+  <select name="${name}_sel" data-pick="${name}"><option value="">${ph}</option>${list.map(x => `<option>${x}</option>`).join('')}</select>
+  <input name="${name}" placeholder="${etcPh}" hidden style="margin-top:8px">`;
+
 function viewAuth(tab = 'login') {
   const signup = tab === 'signup';
   app().innerHTML = `
@@ -259,8 +284,8 @@ function viewAuth(tab = 'login') {
     <form id="authf" class="${signup ? 'panel' : ''}" novalidate>
       ${signup ? `
       <div class="grid2">
-        <div class="field"><label>딜러사명<em>*</em></label><input name="company" required placeholder="예) ○○모터스"></div>
-        <div class="field"><label>지점명</label><input name="branch" placeholder="예) 강남지점"></div>
+        <div class="field"><label>딜러사명<em>*</em></label>${pickField('company', DEALER_COS, '딜러사를 선택해 주세요', '딜러사명 직접 입력')}</div>
+        <div class="field"><label>지점(전시장)<em>*</em></label>${pickField('branch', BRANCHES, '지점을 선택해 주세요', '지점명 직접 입력')}</div>
         <div class="field"><label>담당자 성함<em>*</em></label><input name="manager_name" required></div>
         <div class="field"><label>직급/직책</label><input name="position" placeholder="예) 매니저, 대리, 지점장"></div>
         <div class="field"><label>휴대폰<em>*</em></label><input name="phone" required inputmode="tel" placeholder="010-0000-0000"></div>
@@ -278,6 +303,7 @@ function viewAuth(tab = 'login') {
       <div class="err" id="autherr"></div>
       ${signup ? '' : '<p class="forgot"><a href="#" id="forgot">비밀번호를 잊으셨나요?</a></p>'}
     </form>
+    ${signup ? '' : `<div class="guest-entry"><a class="btn ghost block" href="#/products">비회원으로 상품 둘러보기</a><p>어떤 상품을 파는지 먼저 보실 수 있어요. 공급가는 가입 승인 후 공개됩니다.</p></div>`}
   </div>
   </div>`;
 
@@ -286,6 +312,13 @@ function viewAuth(tab = 'login') {
   $('#forgot') && ($('#forgot').onclick = e => { e.preventDefault(); viewForgot(); });
   const f = $('#authf');
   if (signup) {
+    // 선택값을 실제 입력칸에 반영, '기타'면 직접 입력칸 열기
+    $$('[data-pick]', f).forEach(sel => sel.onchange = () => {
+      const inp = f[sel.dataset.pick], etc = sel.value === '기타';
+      inp.hidden = !etc;
+      inp.value = etc ? '' : sel.value;
+      if (etc) inp.focus();
+    });
     f.phone.oninput = () => f.phone.value = fmtPhone(f.phone.value);
     f.biz_no.oninput = () => f.biz_no.value = fmtBiz(f.biz_no.value);
     bindAddr(f);
@@ -302,7 +335,8 @@ function viewAuth(tab = 'login') {
       return false;
     };
     const checks = signup ? [
-      ['company', !v('company'), '딜러사명을 입력해 주세요.'],
+      [f.company.hidden ? 'company_sel' : 'company', !v('company'), f.company.hidden ? '딜러사를 선택해 주세요.' : '딜러사명을 입력해 주세요.'],
+      [f.branch.hidden ? 'branch_sel' : 'branch', !v('branch'), f.branch.hidden ? '지점을 선택해 주세요.' : '지점명을 입력해 주세요.'],
       ['manager_name', !v('manager_name'), '담당자 성함을 입력해 주세요.'],
       ['phone', v('phone').replace(/\D/g, '').length < 9, '휴대폰 번호를 정확히 입력해 주세요.'],
       ['email', !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('email')), '이메일을 정확히 입력해 주세요.'],
@@ -477,8 +511,13 @@ function viewNotice(title, html, toLogin) {
 }
 
 // ---------------------------------------------------------------- 상품 목록
+// 비회원 가격 자리: 실제 숫자는 넣지 않고 가짜 숫자를 흐리게
+const GUEST_BAR = '<div class="guest-bar"><span><b>비회원 둘러보기</b> · 공급가와 주문은 딜러 가입 승인 후 이용할 수 있어요.</span><a class="btn pri sm" href="#/signup">가입 신청</a></div>';
+const LOCKED_PRICE = '<div class="price locked"><span class="blur" aria-hidden="true">88,000원</span><small>회원 전용가</small></div>';
+
 function productSummary(p) {
   const vs = S.variants.filter(v => v.product_id === p.id);
+  if (S.guest) return { vs, min: 0, max: 0, stock: 1, low: false };   // 비회원은 가격·재고를 모름
   const prices = vs.map(v => v.price);
   const min = Math.min(...prices), max = Math.max(...prices);
   const stock = vs.reduce((a, v) => a + v.stock, 0);
@@ -498,7 +537,7 @@ function productCard(p) {
       ${!s.stock ? '<span class="soldout">품절</span>' : ''}</div>
     <div class="cat">${esc(p.category || '')} · 옵션 ${s.vs.length}</div>
     <h3>${esc(p.name)}</h3>
-    <div class="price">${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>
+    ${S.guest ? LOCKED_PRICE : `<div class="price">${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>`}
     ${s.stock && s.low ? '<div class="low">재고 적음</div>' : ''}
     ${s.vs.length > 1 ? `<div class="dots">${s.vs.slice(0, 6).filter(v => v.image).map(v => `<img src="${thumb(v.image)}" alt="" loading="lazy">`).join('')}</div>` : ''}
   </a>`;
@@ -523,6 +562,7 @@ function viewShop() {
     <aside class="side">
       <h4>카테고리</h4>
       <ul class="cats">${cats.map(c => `<li><button class="${c === S.filter ? 'on' : ''} ${SPECIAL[c] ? 'sp-' + c.toLowerCase() : ''}" data-cat="${esc(c)}"><span>${esc(label(c))}</span><span class="n">${count(c)}</span></button></li>`).join('')}</ul>
+      ${S.guest ? `<h4>딜러 회원 안내</h4><div class="brief"><div>공급가 확인과 주문은 <b>가입 승인 후</b> 이용할 수 있어요.</div><a class="btn pri sm block" href="#/signup" style="margin-top:10px">가입 신청</a></div>` : `
       <h4>주문 안내</h4>
       <div class="brief">
         <div class="bh">배송비</div>
@@ -534,9 +574,10 @@ function viewShop() {
         ${cutoffText(st.same_day_cutoff) ? `<div><b class="acc">${cutoffText(st.same_day_cutoff)} 이전</b> 입금 확인분<br>당일 출고</div>` : '<div>무통장 입금 확인 후 출고</div>'}
         <div>입금 기한 주문 후 ${st.pay_deadline_days || 3}일</div>
       </div>
-      <p class="brief-note">공급가는 VAT 포함입니다</p>
+      <p class="brief-note">공급가는 VAT 포함입니다</p>`}
     </aside>
     <div>
+      ${S.guest ? GUEST_BAR : ''}
       <div class="m-brief">${[st.free_shipping_over ? `<b>${won(st.free_shipping_over)}원 이상</b> 무료배송` : '', cutoffText(st.same_day_cutoff) ? `<b>${cutoffText(st.same_day_cutoff)} 이전</b> 입금 확인분 당일 출고` : ''].filter(Boolean).map(x => `<div>${x}</div>`).join('')}</div>
       <div class="filters">${cats.map(c => `<button class="chip ${c === S.filter ? 'on' : ''}" data-cat="${esc(c)}">${esc(label(c))}</button>`).join('')}</div>
       <div class="grid">${list.map(productCard).join('')}</div>
@@ -678,6 +719,7 @@ function viewProduct(id) {
 
   app().innerHTML = `
   <a class="back" href="#/products">← 상품 목록</a>
+  ${S.guest ? GUEST_BAR : ''}
   <div class="pd">
     <div class="gal">
       <div class="main">
@@ -691,20 +733,22 @@ function viewProduct(id) {
       <div class="cat">${esc(p.category || '')}${tagsHtml(p) ? ` <span class="tags">${tagsHtml(p)}</span>` : ''}</div>
       <h1>${esc(p.name)}</h1>
       <p class="sub">${esc(p.subtitle || '')}</p>
-      <div class="price"><span>${won(min)}원${max > min ? '~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>
-      <div class="opt-label"><span>옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span></span></div>
+      ${S.guest ? `<div class="price locked-pd"><span class="blur" aria-hidden="true">88,000원</span><small>회원 전용가 · 가입 승인 후 공개</small></div>`
+        : `<div class="price"><span>${won(min)}원${max > min ? '~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>`}
+      <div class="opt-label"><span>${S.guest ? '옵션' : '옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span>'}</span></div>
       <div class="opts">${vs.map(v => `
-        <button class="opt ${v.stock ? '' : 'out'}" data-v="${v.id}">
+        <button class="opt ${v.stock || S.guest ? '' : 'out'}" data-v="${v.id}">
           ${v.image ? `<img src="${thumb(v.image)}" alt="">` : '<span class="noimg">사진<br>준비중</span>'}
-          <span>${esc(v.option_name)}${v.stock ? '' : '<span class="so">품절</span>'}${v.price !== min ? `<span class="op">${won(v.price)}원</span>` : ''}</span>
+          <span>${esc(v.option_name)}${v.stock || S.guest ? '' : '<span class="so">품절</span>'}${!S.guest && v.price !== min ? `<span class="op">${won(v.price)}원</span>` : ''}</span>
         </button>`).join('')}</div>
+      ${S.guest ? `<div class="guest-cta"><b>공급가 확인과 주문은 딜러 회원 전용이에요</b><p>지커 딜러·장기렌트 파트너라면 가입 신청해 주세요. 승인되면 바로 공급가를 보고 주문할 수 있어요.</p><div class="gc-btns"><a class="btn pri" href="#/signup">가입 신청</a><a class="btn" href="#/login">로그인</a></div></div>` : `
       <div class="picks" id="picks"></div>
       <div class="pick-total" id="ptotal"></div>
       <div class="buy">
         <button class="btn" id="add" style="flex:1">장바구니 담기</button>
         <button class="btn pri" id="buynow" style="flex:1">바로 주문하기</button>
       </div>
-      <p class="bulk"><a href="#/inquiries/new?cat=${encodeURIComponent('대량 견적')}&product=${p.id}">재고보다 많이 필요하신가요? <b>대량 견적 문의 →</b></a></p>
+      <p class="bulk"><a href="#/inquiries/new?cat=${encodeURIComponent('대량 견적')}&product=${p.id}">재고보다 많이 필요하신가요? <b>대량 견적 문의 →</b></a></p>`}
       <ul class="feats">${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       ${p.info ? `<table class="pinfo">${p.info.split('\n').filter(Boolean).map(l => { const [k, ...r] = l.split(':'); return r.length ? `<tr><th>${esc(k.trim())}</th><td>${esc(r.join(':').trim())}</td></tr>` : `<tr><td colspan="2">${esc(l)}</td></tr>`; }).join('')}</table>` : ''}
       ${S.settings.ship_info ? `<div class="shipinfo"><b>배송 · 교환 안내</b><div>${esc(S.settings.ship_info)}</div></div>` : ''}
@@ -751,6 +795,7 @@ function viewProduct(id) {
     render();
   };
   const pick = v => {
+    if (S.guest) { if (v.image) goSlide(pics.indexOf(v.image)); return; }   // 비회원: 사진만 보여줌
     if (!v.stock) return toast('품절된 옵션입니다');
     if (!avail(v)) return toast('이미 재고만큼 장바구니에 담겨 있습니다');
     if (!picks.some(x => x.v.id === v.id)) picks.push({ v, qty: Math.min(v.min_qty || 1, avail(v)) });
@@ -780,6 +825,7 @@ function viewProduct(id) {
   }, { passive: true });
   $$('.thumbs img').forEach(t => t.onclick = () => goSlide(+t.dataset.i));
   $$('.gnav').forEach(b => b.onclick = () => goSlide((cur + +b.dataset.g + pics.length) % pics.length));
+  if (S.guest) return;
   $('#add').onclick = $('#madd').onclick = () => { const n = commit(); toast(`${n}개를 장바구니에 담았습니다`); render(); };
   $('#buynow').onclick = () => { commit(); location.hash = '#/cart'; };
   $('#mbuy').onclick = () => { if (!picks.length) return $('.opts').scrollIntoView({ behavior: 'smooth', block: 'center' }); commit(); location.hash = '#/cart'; };
@@ -1297,7 +1343,7 @@ async function route() {
   if (RECOVERY) return;
   if (/access_token=|error_description=/.test(location.hash)) return;
   if (isPolicy()) { window.scrollTo(0, 0); return viewPolicy(location.hash.slice(2)); }
-  if (!S.user) return viewAuth('login');
+  if (!S.user) return guestRoute();
   if (S.dealer?.status !== 'approved') return;
   renderNav();
   window.scrollTo(0, 0);
@@ -1319,6 +1365,21 @@ async function route() {
   }
 }
 
+// 로그인 전: 상품 목록·상세만 비회원으로 열람, 나머지는 로그인/가입 화면
+const GUEST_OK = h => h === '/products' || h.startsWith('/p/');
+async function guestRoute() {
+  const h = (location.hash.replace(/^#/, '') || '/').split('?')[0];
+  if (!GUEST_OK(h)) { S.guest = false; renderNav(); return viewAuth(h === '/signup' ? 'signup' : 'login'); }
+  if (!S.guest) {
+    app().innerHTML = `<div class="loading">불러오는 중…</div>`;
+    try { Object.assign(S, await api.publicCatalog(), { settings: {}, guest: true }); }
+    catch (e) { return viewAuth('login'); }
+  }
+  renderNav();
+  window.scrollTo(0, 0);
+  h === '/products' ? viewShop() : viewProduct(h.slice(3));
+}
+
 async function boot() {
   app().innerHTML = `<div class="loading">불러오는 중…</div>`;
   api.publicInfo().then(i => { S.info = { ...S.info, ...i }; renderFooter(); }).catch(() => renderFooter());
@@ -1326,7 +1387,8 @@ async function boot() {
     S.user = await api.user();
     if (RECOVERY && S.user) return viewNewPassword();
     if (isPolicy()) { renderNav(); route(); if (!S.user) return; }
-    if (!S.user) { renderNav(); return viewAuth('login'); }
+    if (!S.user) return guestRoute();
+    S.guest = false;
     S.dealer = await api.dealer(S.user.id);
     renderNav();
     if (!S.dealer) return viewNotice('계정 정보를 찾을 수 없습니다', '관리자에게 문의해 주세요.');
