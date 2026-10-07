@@ -46,6 +46,16 @@ const api = DEMO ? demoAdminApi() : {
   },
   async delCoupon(id) { const { error } = await sb.from('coupons').delete().eq('id', id); if (error) throw error; },
   async updSettings(patch) { const { error } = await sb.from('shop_settings').update(patch).eq('id', 1); if (error) throw error; },
+  // 딜러 활동: 장바구니 전체 + 최근 30일 상품 조회
+  async activity() {
+    const since = new Date(Date.now() - 30 * 864e5).toISOString();
+    const [c, v] = await Promise.all([
+      sb.from('carts').select('*'),
+      sb.from('product_views').select('dealer_id,product_id,viewed_at').gte('viewed_at', since).order('viewed_at', { ascending: false }).limit(20000),
+    ]);
+    for (const r of [c, v]) if (r.error) throw r.error;
+    return { carts: c.data || [], views: v.data || [] };
+  },
 };
 
 function demoAdminApi() {
@@ -83,6 +93,10 @@ function demoAdminApi() {
       data.dealers = data.dealers.filter(x => x.id !== id);
     },
     async updSettings(patch) { Object.assign(data.settings, patch); },
+    async activity() {
+      const c = store('zk_demo_cartsrv');
+      return { carts: c ? [{ dealer_id: 'demo', ...c }] : [], views: store('zk_demo_views') || [] };
+    },
     async saveNotice(id, patch) {
       if (id) Object.assign(data.notices.find(x => x.id === id), patch);
       else data.notices.unshift({ id: Date.now(), active: true, created_at: new Date().toISOString(), ...patch });
@@ -111,6 +125,7 @@ function renderNav() {
     <a href="#/orders" class="${on('#/orders')}">주문${nPay ? `<span class="pill">${nPay}</span>` : ''}</a>
     <a href="#/stock" class="${on('#/stock')}">재고·가격</a>
     <a href="#/dealers" class="${on('#/dealers')}">딜러${nDealer ? `<span class="pill">${nDealer}</span>` : ''}</a>
+    <a href="#/activity" class="${on('#/activity')}">딜러 활동</a>
     <a href="#/inquiries" class="${on('#/inquiries')}">문의${A.inquiries.filter(q => q.status === 'open').length ? `<span class="pill">${A.inquiries.filter(q => q.status === 'open').length}</span>` : ''}</a>
     <a href="#/coupons" class="${on('#/coupons')}">쿠폰</a>
     <a href="#/notices" class="${on('#/notices')}">공지</a>
@@ -701,6 +716,84 @@ function viewCoupons() {
 
 // ---------------------------------------------------------------- 상품 문구 수정
 // 딜러 정보 수정 (딜러사명·지점명·사업자번호는 딜러가 직접 못 바꿔서 1:1 문의로 요청받아 여기서 변경)
+// ---------------------------------------------------------------- 딜러 활동 (장바구니 · 상품 조회)
+async function viewActivity(force) {
+  if (!A.act || force) {
+    app().innerHTML = '<div class="loading">불러오는 중…</div>';
+    try { A.act = await api.activity(); }
+    catch (e) { app().innerHTML = `<div class="empty">딜러 활동을 불러오지 못했습니다.<br><span class="small">${esc(errMsg(e))}<br>SQL 32번을 실행했는지 확인해 주세요.</span></div>`; return; }
+  }
+  const days = A.actDays || 7, since = Date.now() - days * 864e5;
+  const views = A.act.views.filter(v => new Date(v.viewed_at).getTime() >= since);
+  const prod = id => A.products.find(p => p.id === id);
+  const vari = id => A.variants.find(v => v.id === id);
+  const ago = t => { const m = Math.round((Date.now() - new Date(t)) / 6e4); return m < 60 ? `${Math.max(m, 1)}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
+  const cartLines = c => (c?.items || []).map(it => { const v = vari(it.variant_id), p = v && prod(v.product_id); return v && p ? { p, v, qty: it.qty, amt: v.price * it.qty } : null; }).filter(Boolean);
+  const carts = A.act.carts.filter(c => cartLines(c).length);
+
+  // 상품별: 조회수 · 본 딜러 수 · 비회원 조회 · 장바구니 담은 딜러/수량
+  const ps = A.products.map(p => {
+    const pv = views.filter(v => v.product_id === p.id);
+    const inCart = carts.map(c => cartLines(c).filter(l => l.p.id === p.id)).filter(ls => ls.length);
+    return { p, n: pv.length, dealers: new Set(pv.filter(v => v.dealer_id).map(v => v.dealer_id)).size, guest: pv.filter(v => !v.dealer_id).length,
+      cartDealers: inCart.length, cartQty: inCart.flat().reduce((a, l) => a + l.qty, 0) };
+  }).filter(x => x.n || x.cartDealers).sort((a, b) => b.n - a.n || b.cartQty - a.cartQty);
+
+  // 딜러별
+  const rows = A.dealers.filter(d => d.status === 'approved').map(d => {
+    const dv = views.filter(v => v.dealer_id === d.id);
+    const cart = A.act.carts.find(c => c.dealer_id === d.id), lines = cartLines(cart);
+    const byP = {};
+    dv.forEach(v => { byP[v.product_id] = byP[v.product_id] || { n: 0, last: v.viewed_at }; byP[v.product_id].n++; if (v.viewed_at > byP[v.product_id].last) byP[v.product_id].last = v.viewed_at; });
+    const top = Object.entries(byP).map(([pid, x]) => ({ p: prod(+pid), ...x })).filter(x => x.p).sort((a, b) => b.n - a.n);
+    const last = [dv[0]?.viewed_at, lines.length ? cart.updated_at : null].filter(Boolean).sort().pop();
+    const orders = A.orders.filter(o => o.dealer_id === d.id && o.status !== 'cancelled').length;
+    return { d, views: dv.length, top, lines, cart, amt: lines.reduce((a, l) => a + l.amt, 0), last, orders };
+  }).sort((a, b) => (b.lines.length ? 1 : 0) - (a.lines.length ? 1 : 0) || b.amt - a.amt || b.views - a.views);
+  const guestViews = views.filter(v => !v.dealer_id).length;
+
+  app().innerHTML = `
+  <div class="page-head"><div><div class="eyebrow">Activity</div><h1>딜러 활동</h1></div>
+    <div class="row-btns">
+      <div class="seg-days">${[7, 30].map(n => `<button class="${n === days ? 'on' : ''}" data-days="${n}">최근 ${n}일</button>`).join('')}</div>
+      <button class="btn sm ghost" id="actre">새로고침</button>
+    </div></div>
+  <p class="small mut" style="margin:-12px 0 18px">상품 조회는 같은 사람이 같은 상품을 10분 안에 다시 열면 한 번으로 셉니다. 장바구니는 딜러가 지금 담아 둔 상태입니다.</p>
+
+  <div class="act-grid">
+    <section class="panel"><h2>많이 본 상품 <span class="mut small">최근 ${days}일 · 비회원 조회 ${guestViews}회</span></h2>
+      ${ps.filter(x => x.n).length ? `<table class="tbl act-tbl"><thead><tr><th>상품</th><th class="n">조회</th><th class="n">본 딜러</th><th class="n">비회원</th></tr></thead><tbody>
+        ${ps.filter(x => x.n).map(x => `<tr><td>${esc(x.p.name)}</td><td class="n">${x.n}</td><td class="n">${x.dealers}명</td><td class="n">${x.guest}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="mut small">아직 조회 기록이 없습니다.</div>'}
+    </section>
+    <section class="panel"><h2>장바구니에 담긴 상품 <span class="mut small">현재</span></h2>
+      ${ps.filter(x => x.cartDealers).length ? `<table class="tbl act-tbl"><thead><tr><th>상품</th><th class="n">담은 딜러</th><th class="n">수량 합계</th></tr></thead><tbody>
+        ${ps.filter(x => x.cartDealers).sort((a, b) => b.cartQty - a.cartQty).map(x => `<tr><td>${esc(x.p.name)}</td><td class="n">${x.cartDealers}명</td><td class="n">${won(x.cartQty)}개</td></tr>`).join('')}
+      </tbody></table>` : '<div class="mut small">장바구니에 담긴 상품이 없습니다.</div>'}
+    </section>
+  </div>
+
+  <h2 style="margin:30px 0 12px">딜러별 <span class="mut small" style="font-weight:400">승인된 딜러 ${rows.length}명 · 장바구니 담은 딜러 ${rows.filter(r => r.lines.length).length}명</span></h2>
+  <div class="act-list">
+  ${rows.map(r => `
+    <details class="act-d ${r.lines.length || r.views ? '' : 'idle'}">
+      <summary>
+        <div class="who"><b>${esc(r.d.company)} ${esc(r.d.branch || '')}</b><span>${esc(r.d.manager_name)}${r.d.position ? ' ' + esc(r.d.position) : ''} · ${esc(r.d.phone || '')}</span></div>
+        <div class="st"><small>상품 조회</small><b>${r.views}</b></div>
+        <div class="st"><small>장바구니</small><b class="${r.lines.length ? 'hl' : ''}">${r.lines.length ? `${r.lines.length}품목 · ${won(r.amt)}원` : '-'}</b></div>
+        <div class="st"><small>주문</small><b>${r.orders}건</b></div>
+        <div class="st"><small>최근 활동</small><b>${r.last ? ago(r.last) : '-'}</b></div>
+      </summary>
+      <div class="act-body">
+        <div><h4>많이 본 상품 (최근 ${days}일)</h4>${r.top.length ? `<ul>${r.top.map(x => `<li><span>${esc(x.p.name)}</span><span class="mut">${x.n}회 · ${ago(x.last)}</span></li>`).join('')}</ul>` : '<div class="mut small">조회 기록 없음</div>'}</div>
+        <div><h4>장바구니 ${r.lines.length ? `<span class="mut small">${ago(r.cart.updated_at)} 수정</span>` : ''}</h4>${r.lines.length ? `<ul>${r.lines.map(l => `<li><span>${esc(l.p.name)} <span class="mut">· ${esc(l.v.option_name)}</span></span><span>${won(l.qty)}개 · ${won(l.amt)}원</span></li>`).join('')}<li class="sum"><span>합계 (할인 전 공급가)</span><b>${won(r.amt)}원</b></li></ul>` : '<div class="mut small">비어 있음</div>'}</div>
+      </div>
+    </details>`).join('')}
+  </div>`;
+  $$('[data-days]').forEach(b => b.onclick = () => { A.actDays = +b.dataset.days; viewActivity(); });
+  $('#actre').onclick = () => viewActivity(true);
+}
+
 function editDealer(id) {
   const d = A.dealers.find(x => x.id === id);
   const ov = document.createElement('div');
@@ -792,6 +885,7 @@ function route() {
   else if (h.startsWith('#/notices')) viewNotices();
   else if (h.startsWith('#/inquiries')) viewInquiriesAdmin();
   else if (h.startsWith('#/coupons')) viewCoupons();
+  else if (h.startsWith('#/activity')) viewActivity();
   else viewOrders();
 }
 

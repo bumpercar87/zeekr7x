@@ -57,6 +57,16 @@ const api = DEMO ? demoApi() : {
     const { error } = await sb.from('inquiries').insert(row);
     if (error) throw error;
   },
+  // 장바구니 서버 저장 (기기 간 공유 + 관리자 '딜러 활동'에서 확인)
+  async getCart() {
+    const { data, error } = await sb.from('carts').select('items,updated_at').eq('dealer_id', S.user.id).maybeSingle();
+    if (error) throw error; return data;
+  },
+  async saveCart(items) {
+    const { error } = await sb.from('carts').upsert({ dealer_id: S.user.id, items, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  },
+  async logView(pid) { await sb.rpc('log_view', { p_product_id: pid }); },
   // 비회원 둘러보기: 상품 + 옵션 이름·사진 (가격·재고 없음)
   async publicCatalog() {
     const [p, v] = await Promise.all([
@@ -171,6 +181,9 @@ function demoApi() {
       store('zk_demo_inq', list);
     },
     async publicProducts() { return (await (await fetch('demo_products.json', { cache: 'no-store' })).json()); },
+    async getCart() { return store('zk_demo_cartsrv'); },
+    async saveCart(items) { store('zk_demo_cartsrv', { items, updated_at: new Date().toISOString() }); },
+    async logView(pid) { const l = store('zk_demo_views') || []; l.push({ dealer_id: S.user ? 'demo' : null, product_id: pid, viewed_at: new Date().toISOString() }); store('zk_demo_views', l); },
     async publicCatalog() {
       const products = await (await fetch('demo_products.json', { cache: 'no-store' })).json();
       const vs = await (await fetch('demo_variants.json', { cache: 'no-store' })).json();
@@ -190,7 +203,19 @@ function demoApi() {
 // ---------------------------------------------------------------- 장바구니
 const cartKey = () => 'zk_cart_' + (S.user?.id || 'anon');
 const getCart = () => store(cartKey()) || [];
-function setCart(c) { store(cartKey(), c); renderNav(); }
+function setCart(c) {
+  store(cartKey(), c); store(cartKey() + '_at', Date.now()); renderNav();
+  clearTimeout(setCart._t);
+  if (S.user && S.dealer?.status === 'approved') setCart._t = setTimeout(() => api.saveCart(c).catch(() => {}), 800);
+}
+// 로그인 직후: 서버 장바구니가 이 기기 것보다 최신이면 가져오고, 아니면 이 기기 것을 올림
+async function syncCart() {
+  try {
+    const srv = await api.getCart(), localAt = store(cartKey() + '_at') || 0, local = getCart();
+    if (srv && new Date(srv.updated_at).getTime() > localAt) { store(cartKey(), srv.items || []); store(cartKey() + '_at', new Date(srv.updated_at).getTime()); }
+    else if (local.length || srv) await api.saveCart(local);
+  } catch (e) { /* 장바구니는 이 기기 것으로 계속 사용 */ }
+}
 function addToCart(variant_id, qty) {
   const c = getCart(), line = c.find(x => x.variant_id === variant_id);
   if (line) line.qty += qty; else c.push({ variant_id, qty });
@@ -411,7 +436,7 @@ function viewPolicy(kind) {
   const i = S.info, co = esc(i.biz_name || '브링고'), mail = esc(i.biz_email || ''), officer = esc(i.privacy_officer || '(설정 필요)');
   const privacy = `
     <p>${co}(이하 "회사")는 딜러 전용 주문 서비스 제공을 위해 아래와 같이 개인정보를 처리합니다.</p>
-    <h3>1. 수집 항목</h3><p>필수: 딜러사명, 담당자 성함, 휴대폰 번호, 이메일, 비밀번호<br>선택: 지점명, 사업자등록번호, 기본 배송지<br>주문 시: 주문 담당자, 받는 분 성함·연락처·주소, 입금자명, 세금계산서 발행 정보</p>
+    <h3>1. 수집 항목</h3><p>필수: 딜러사명, 지점명, 담당자 성함, 휴대폰 번호, 이메일, 비밀번호<br>선택: 직급/직책, 사업자등록번호, 기본 배송지<br>주문 시: 주문 담당자, 받는 분 성함·연락처·주소, 입금자명, 세금계산서 발행 정보<br>서비스 이용 시 자동 기록: 상품 조회 기록, 장바구니 내역 (재고 준비·상품 안내 목적)</p>
     <h3>2. 수집·이용 목적</h3><p>회원 가입 및 승인, 주문 접수·입금 확인·배송, 세금계산서 발행, 문의 응대, 주문 관련 안내 메일 발송</p>
     <h3>3. 보유 기간</h3><p>회원 탈퇴 시까지. 단, 관계 법령(전자상거래법 등)에 따라 계약·대금결제·재화 공급 기록은 5년, 소비자 불만·분쟁 처리 기록은 3년간 보관합니다.</p>
     <h3>4. 제3자 제공 및 처리 위탁</h3><p>배송을 위해 택배사에 받는 분 성함·연락처·주소를 제공합니다. 서비스 운영을 위해 Supabase(데이터 보관), Google(메일 발송·주문 기록)을 이용합니다.</p>
@@ -718,6 +743,7 @@ function viewNotices() {
 function viewProduct(id) {
   const p = product(+id);
   if (!p) return viewShop();
+  if (Date.now() - (store('zk_v_' + p.id) || 0) > 6e5) { store('zk_v_' + p.id, Date.now()); api.logView(p.id).catch(() => {}); }
   const { vs, min, max } = productSummary(p);
   const picks = [];          // 고른 옵션들 [{ v, qty }]
   const pics = [...new Set([p.image, ...(p.images || []), ...vs.map(v => v.image)].filter(Boolean))];
@@ -1404,6 +1430,7 @@ async function boot() {
     if (S.dealer.status === 'pending') return viewNotice('가입 신청이 완료되었습니다', `<b>${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</b> 가입 승인 대기 중입니다.<br>승인이 완료되면 <b>${esc(S.dealer.email)}</b>로 안내 메일을 보내드리며,<br>이후 공급가 확인과 주문이 가능합니다.`);
     if (S.dealer.status === 'rejected') return viewNotice('가입이 승인되지 않았습니다', '자세한 내용은 관리자에게 문의해 주세요.');
     Object.assign(S, await api.catalog());
+    await syncCart();
     const [ns] = await Promise.allSettled([api.notices(), loadOrders(), loadInquiries()]);
     S.notices = ns.status === 'fulfilled' ? ns.value : [];
     route();
