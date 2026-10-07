@@ -932,6 +932,8 @@ function viewCart() {
   if (S.myCoupons === undefined) { S.myCoupons = null; api.myCoupons().then(l => { S.myCoupons = l; if (location.hash === '#/cart') viewCart(); }).catch(() => { S.myCoupons = []; }); }
   const need = st.free_shipping_over && ship ? st.free_shipping_over - sub : 0;
   const cp = S.coupon && (S.coupon.min_order || 0) <= sub && !(S.coupon.kind === 'free_ship' && !ship) ? S.coupon : null;
+  // 주문 일시 중지 (관리자 설정) — 장바구니·견적서는 그대로, 관리자 계정은 테스트용으로 주문 가능
+  const closed = st.orders_open === false && !d.is_admin;
   const cdisc = cp ? couponDiscount(cp, sub, ship) : 0;
   // 입력하던 주문서 내용 유지 (수량을 바꿔 화면을 다시 그려도 지워지지 않게)
   const D = S.draft = S.draft || {
@@ -994,7 +996,8 @@ function viewCart() {
       ${couponBox(sub, ship)}
       <div class="row tot"><span>총 입금액</span><b>${won(sub + ship - cdisc)}원</b></div>
       <p class="small mut" style="margin:14px 0">결제 방법 · <b style="color:var(--ink)">무통장 입금</b><br>주문 후 ${st.pay_deadline_days || 3}일 이내 입금해 주세요. 기한이 지나면 자동 취소됩니다.</p>
-      <button class="btn pri block" id="order" ${blocked ? 'disabled' : ''}>${won(sub + ship - cdisc)}원 주문하기</button>
+      ${closed ? `<div class="closed-note"><b>지금은 주문을 받지 않아요</b><div>${esc(st.orders_closed_msg || '입고 준비 중입니다. 주문이 열리면 공지로 알려드릴게요.')}</div></div>` : ''}
+      <button class="btn pri block" id="order" ${blocked || closed ? 'disabled' : ''}>${closed ? '주문 준비 중' : `${won(sub + ship - cdisc)}원 주문하기`}</button>
       <div class="err" id="ordererr">${blocked ? '재고·수량을 확인해 주세요.' : ''}</div>
       <button class="btn ghost block" id="quote" style="margin-top:10px">견적서 받기 (인쇄 · PDF)</button>
       ${tierText(st) ? `<p class="small mut" style="margin-top:12px">수량 할인: ${tierText(st)} (같은 상품 옵션 합산)</p>` : ''}

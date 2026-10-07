@@ -602,3 +602,7 @@ ul.inq-guide b{color:var(--ink)}
 .gc-txt b{font-size:16px;line-height:1.35}
 .gc-s{font-size:13px;color:var(--mut);line-height:1.45}
 .gc-go{flex:none;font-size:22px;font-weight:800;color:var(--acc)}
+
+/* 주문 일시 중지 안내 (장바구니) */
+.closed-note{background:#fff6f2;border:1px solid #f2c9b8;padding:12px 14px;margin:0 0 10px;font-size:14.5px;line-height:1.55;color:var(--ink2)}
+.closed-note b{display:block;color:var(--acc);margin-bottom:2px}
