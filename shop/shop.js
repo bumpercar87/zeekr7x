@@ -279,7 +279,7 @@ function viewAuth(tab = 'login') {
       : '<p class="lead lead2"><span>처음이신가요? <a href="#" data-tab-link="signup">가입 신청</a> 후 승인되면 이용할 수 있어요.</span><span>승인된 계정으로 로그인하면 공급가 확인과 주문이 가능합니다.</span></p>'}
     ${signup ? '' : `<a class="guest-card" href="#/products">
       <div class="gc-thumbs" id="gcthumbs"></div>
-      <div class="gc-txt"><span class="gc-k">비회원 둘러보기</span><b>회원이 아니신가요? 상품부터 구경해 보세요</b><span class="gc-s">어떤 상품을 파는지 바로 볼 수 있어요 · 공급가는 가입 승인 후 공개</span></div>
+      <div class="gc-txt"><span class="gc-k">비회원 둘러보기</span><b>회원이 아니신가요?<br>상품부터 구경해보세요.</b><span class="gc-s">어떤 상품을 파는지 바로 볼 수 있어요 · 공급가는 가입 승인 후 공개</span></div>
       <span class="gc-go">→</span>
     </a>`}
     <div class="tabs">
