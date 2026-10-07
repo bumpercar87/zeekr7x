@@ -277,6 +277,11 @@ function viewAuth(tab = 'login') {
     ${signup
       ? '<p class="lead">가입 신청 후 승인되면 공급가 확인과 주문이 가능합니다.</p>'
       : '<p class="lead lead2"><span>처음이신가요? <a href="#" data-tab-link="signup">가입 신청</a> 후 승인되면 이용할 수 있어요.</span><span>승인된 계정으로 로그인하면 공급가 확인과 주문이 가능합니다.</span></p>'}
+    ${signup ? '' : `<a class="guest-card" href="#/products">
+      <div class="gc-thumbs" id="gcthumbs"></div>
+      <div class="gc-txt"><span class="gc-k">비회원 둘러보기</span><b>회원이 아니신가요? 상품부터 구경해 보세요</b><span class="gc-s">어떤 상품을 파는지 바로 볼 수 있어요 · 공급가는 가입 승인 후 공개</span></div>
+      <span class="gc-go">→</span>
+    </a>`}
     <div class="tabs">
       <button data-tab="login" class="${signup ? '' : 'on'}">로그인</button>
       <button data-tab="signup" class="${signup ? 'on' : ''}">가입 신청</button>
@@ -303,10 +308,10 @@ function viewAuth(tab = 'login') {
       <div class="err" id="autherr"></div>
       ${signup ? '' : '<p class="forgot"><a href="#" id="forgot">비밀번호를 잊으셨나요?</a></p>'}
     </form>
-    ${signup ? '' : `<div class="guest-entry"><a class="btn ghost block" href="#/products">비회원으로 상품 둘러보기</a><p>어떤 상품을 파는지 먼저 보실 수 있어요. 공급가는 가입 승인 후 공개됩니다.</p></div>`}
   </div>
   </div>`;
 
+  if (!signup) fillGuestThumbs();
   $$('.tabs button').forEach(b => b.onclick = () => viewAuth(b.dataset.tab));
   $$('[data-tab-link]').forEach(a => a.onclick = e => { e.preventDefault(); viewAuth(a.dataset.tabLink); });
   $('#forgot') && ($('#forgot').onclick = e => { e.preventDefault(); viewForgot(); });
@@ -369,10 +374,11 @@ function viewAuth(tab = 'login') {
   };
 }
 
-async function fillIntro() {
+// 로그인 화면의 비회원 둘러보기 카드에 상품 사진 4장
+async function fillGuestThumbs() {
   if (!S.pub.length) S.pub = await api.publicProducts().catch(() => []);
-  const g = $('#introgrid');
-  if (g) g.innerHTML = S.pub.filter(p => p.image).slice(0, 8).map(p => `<figure><img src="${thumb(p.image)}" alt="" loading="lazy"><figcaption>${esc(p.name)}</figcaption></figure>`).join('');
+  const g = $('#gcthumbs');
+  if (g) g.innerHTML = S.pub.filter(p => p.image).slice(0, 4).map(p => `<img src="${thumb(p.image)}" alt="" loading="lazy">`).join('');
 }
 
 function contactLine() {

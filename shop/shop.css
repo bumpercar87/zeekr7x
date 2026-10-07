@@ -590,3 +590,15 @@ ul.inq-guide b{color:var(--ink)}
   .guest-bar{flex-direction:column;align-items:stretch;text-align:left}
   .guest-bar .btn{text-align:center}
 }
+
+/* 로그인 화면: 비회원 둘러보기 카드 */
+.guest-card{display:flex;align-items:center;gap:16px;margin:4px 0 26px;padding:16px 18px;background:#fff;border:2px solid var(--acc);color:var(--ink);transition:box-shadow .12s,transform .12s}
+.guest-card:hover{box-shadow:4px 4px 0 rgba(228,80,31,.18);transform:translate(-1px,-1px)}
+.gc-thumbs{display:grid;grid-template-columns:repeat(2,38px);gap:4px;flex:none}
+.gc-thumbs img{width:38px;height:38px;object-fit:cover;border:1px solid var(--hair)}
+.gc-thumbs:empty{display:none}
+.gc-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.gc-k{font-size:12px;font-weight:800;color:var(--acc);letter-spacing:.04em}
+.gc-txt b{font-size:16px;line-height:1.35}
+.gc-s{font-size:13px;color:var(--mut);line-height:1.45}
+.gc-go{flex:none;font-size:22px;font-weight:800;color:var(--acc)}
