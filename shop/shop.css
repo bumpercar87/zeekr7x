@@ -645,3 +645,20 @@ ul.inq-guide b{color:var(--ink)}
   .sec-h.big h2{font-size:23px}
   .sec-h.big p{font-size:14px}
 }
+
+/* 바로 출고 = 초록 (주문 가능 신호), 입고 예정 = 주황 */
+:root{--go:#0f8a4d}
+.tagb.now{background:var(--go)}
+.sec-h.big.now{border-top-color:var(--go)}
+.sec-h.big.now .sec-k,.sec-h.big.now h2 em{background:var(--go)}
+.cats button.sp-now span:first-child{color:var(--go)}
+
+/* 카드 사진 위 상태 태그: 크게, 선명하게 */
+.card .ph .tags{left:0;top:10px;gap:0;flex-direction:column;align-items:flex-start}
+.card .ph .tagb.now,.card .ph .tagb.soon{font-size:14px;font-weight:800;letter-spacing:0;padding:6px 12px 6px 10px;box-shadow:0 2px 6px rgba(0,0,0,.18);display:inline-flex;align-items:center;gap:6px}
+.card .ph .tagb.now::before{content:"";width:7px;height:7px;border-radius:50%;background:#7dffb5}
+.card .ph .tagb.soon{background:var(--acc);color:#fff}
+.pd .cat .tagb.soon{background:var(--acc);color:#fff;box-shadow:none}
+@media (max-width:860px){
+  .card .ph .tagb.now,.card .ph .tagb.soon{font-size:13px;padding:5px 10px 5px 8px}
+}
