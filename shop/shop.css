@@ -662,3 +662,11 @@ ul.inq-guide b{color:var(--ink)}
 @media (max-width:860px){
   .card .ph .tagb.now,.card .ph .tagb.soon{font-size:13px;padding:5px 10px 5px 8px}
 }
+
+/* 사진 없는 옵션: 글자 버튼 */
+.opt.txt{padding:12px 14px;min-height:50px}
+.opt.txt b{display:block;font-size:15px;font-weight:700}
+.opt.txt .od{display:block;font-size:13px;color:var(--mut);margin-top:2px}
+.opts.txtonly{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.opt.txt.on{background:var(--ink);color:#fff}
+.opt.txt.on .od,.opt.txt.on .op{color:rgba(255,255,255,.75)}

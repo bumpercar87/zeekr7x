@@ -569,6 +569,8 @@ function productSummary(p) {
   const low = vs.some(v => v.stock > 0 && v.stock <= 5);
   return { vs, min, max, stock, low, status: st(stock > 0) };
 }
+// 사진 없는 옵션: '매트 (저반사)' → 이름 '매트' + 설명 '저반사'
+const optText = name => { const m = String(name).match(/^(.*?)\s*\((.+)\)\s*$/); return m ? `<b>${esc(m[1])}</b><span class="od">${esc(m[2])}</span>` : `<b>${esc(name)}</b>`; };
 const statusOf = p => productSummary(p).status;
 const arrivalLabel = p => `${p.arrival} 입고 예정`;
 const STATUS_ORDER = { now: 0, soon: 1, out: 2 };
@@ -800,10 +802,10 @@ function viewProduct(id) {
         : `<div class="price"><span>${won(min)}원${max > min ? '~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>`}
       ${status === 'soon' ? `<div class="arrive-line"><b>${esc(arrivalLabel(p))}</b> · 입고되면 주문할 수 있어요</div>` : status === 'out' ? '<div class="arrive-line out"><b>품절</b> · 재입고 일정은 문의해 주세요</div>' : ''}
       <div class="opt-label"><span>${!canBuy ? '옵션' : '옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span>'}</span></div>
-      <div class="opts">${vs.map(v => `
-        <button class="opt ${v.stock || !canBuy ? '' : 'out'}" data-v="${v.id}">
-          ${v.image ? `<img src="${thumb(v.image)}" alt="">` : '<span class="noimg">사진<br>준비중</span>'}
-          <span>${esc(v.option_name)}${v.stock || !canBuy ? '' : `<span class="so">${p.arrival ? '입고 예정' : '품절'}</span>`}${!S.guest && v.price !== min ? `<span class="op">${won(v.price)}원</span>` : ''}</span>
+      <div class="opts ${vs.some(v => v.image) ? '' : 'txtonly'}">${vs.map(v => `
+        <button class="opt ${v.image ? '' : 'txt'} ${v.stock || !canBuy ? '' : 'out'}" data-v="${v.id}">
+          ${v.image ? `<img src="${thumb(v.image)}" alt="">` : ''}
+          <span>${v.image ? esc(v.option_name) : optText(v.option_name)}${v.stock || !canBuy ? '' : `<span class="so">${p.arrival ? '입고 예정' : '품절'}</span>`}${!S.guest && v.price !== min ? `<span class="op">${won(v.price)}원</span>` : ''}</span>
         </button>`).join('')}</div>
       ${S.guest ? `<div class="guest-cta"><b>공급가 확인과 주문은 딜러 회원 전용이에요</b><p>지커 딜러·장기렌트 파트너라면 가입 신청해 주세요. 승인되면 바로 공급가를 보고 주문할 수 있어요.</p><div class="gc-btns"><a class="btn pri" href="#/signup">가입 신청</a><a class="btn" href="#/login">로그인</a></div></div>`
       : !canBuy ? `<div class="restock-box"><b>${status === 'soon' ? esc(arrivalLabel(p)) + ' 상품이에요' : '지금은 품절이에요'}</b><p>입고 알림을 신청해 두시면 들어오는 대로 메일로 알려 드릴게요. 예약 주문·선입금은 받지 않아요.</p>${restockBtn('pri block')}</div>` : `
