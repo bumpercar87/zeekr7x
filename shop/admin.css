@@ -155,3 +155,19 @@
   .act-d .who{grid-column:1 / -1}
   .page-head .row-btns{flex-wrap:wrap}
 }
+
+/* ===== 입고 예정 · 입고 알림 ===== */
+.act-d summary{grid-template-columns:minmax(0,2.2fr) repeat(5,minmax(0,1fr))}
+.act-body .full{grid-column:1 / -1}
+.arr-in{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.arr-in input{width:92px;padding:4px 6px;border:1px solid var(--hair2);font-size:13.5px;background:#fff}
+.arr-in input:not(:placeholder-shown){border-color:var(--acc);color:var(--acc);font-weight:700}
+.rs-panel{margin-top:18px}
+.rs-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.rs-head h2{font-size:17px;margin:0}
+.rs-head select{padding:6px 8px;border:1px solid var(--hair2);background:#fff;font-size:14px;max-width:260px}
+.rs-done td{color:var(--mut)}
+@media (max-width:860px){
+  .act-d summary{grid-template-columns:1fr 1fr}
+  .rs-panel .tbl{display:block;overflow-x:auto;white-space:nowrap}
+}

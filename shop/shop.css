@@ -613,3 +613,19 @@ ul.inq-guide b{color:var(--ink)}
 .ft-biz summary::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .15s}
 .ft-biz[open] summary::after{transform:rotate(-135deg) translateY(-2px)}
 .ft-biz .ft-info{margin-top:8px}
+
+/* ===== 가오픈: 입고 상태 ===== */
+.tagb.now{background:var(--ink)}
+.tagb.soon{background:#fff;color:var(--acc);box-shadow:inset 0 0 0 1.5px var(--acc)}
+.sec-h .sec-n{font-size:14px;font-weight:600;color:var(--mut);margin-left:4px}
+.sec-h.soon h2{color:var(--ink2)}
+.sec-h.soon{border-bottom-color:var(--hair2)}
+.cats button.sp-now span:first-child{font-weight:700}
+.cats button.sp-soon span:first-child{color:var(--acc);font-weight:700}
+.arrive-line{margin:14px 0 0;padding:10px 14px;background:#fff6f2;border:1px solid #f2c9b8;font-size:14.5px;color:var(--ink2)}
+.arrive-line b{color:var(--acc)}
+.arrive-line.out b{color:var(--bad)}
+.restock-box{margin:18px 0;padding:18px;background:#fff;border:1px solid var(--ink)}
+.restock-box b{font-size:16px}
+.restock-box p{font-size:14.5px;color:var(--ink2);margin:6px 0 14px;line-height:1.6}
+.restock-mini{font-size:14px;color:var(--mut);margin:12px 0 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}

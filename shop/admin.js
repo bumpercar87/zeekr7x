@@ -49,13 +49,16 @@ const api = DEMO ? demoAdminApi() : {
   // 딜러 활동: 장바구니 전체 + 최근 30일 상품 조회
   async activity() {
     const since = new Date(Date.now() - 30 * 864e5).toISOString();
-    const [c, v] = await Promise.all([
+    const [c, v, q] = await Promise.all([
       sb.from('carts').select('*'),
       sb.from('product_views').select('dealer_id,product_id,viewed_at').gte('viewed_at', since).order('viewed_at', { ascending: false }).limit(20000),
+      sb.from('restock_requests').select('*').order('created_at', { ascending: false }),
     ]);
     for (const r of [c, v]) if (r.error) throw r.error;
-    return { carts: c.data || [], views: v.data || [] };
+    return { carts: c.data || [], views: v.data || [], restock: q.error ? [] : q.data || [] };
   },
+  // 입고 알림 메일 발송 (아직 안내하지 않은 신청자에게) → 보낸 수
+  async notifyRestock(pid) { const { data, error } = await sb.rpc('admin_notify_restock', { p_product_id: pid }); if (error) throw error; return data; },
 };
 
 function demoAdminApi() {
@@ -95,8 +98,9 @@ function demoAdminApi() {
     async updSettings(patch) { Object.assign(data.settings, patch); },
     async activity() {
       const c = store('zk_demo_cartsrv');
-      return { carts: c ? [{ dealer_id: 'demo', ...c }] : [], views: store('zk_demo_views') || [] };
+      return { carts: c ? [{ dealer_id: 'demo', ...c }] : [], views: store('zk_demo_views') || [], restock: store('zk_demo_restock') || [] };
     },
+    async notifyRestock(pid) { const l = store('zk_demo_restock') || []; let n = 0; l.forEach(r => { if (r.product_id === pid && !r.notified_at) { r.notified_at = new Date().toISOString(); n++; } }); store('zk_demo_restock', l); return n; },
     async saveNotice(id, patch) {
       if (id) Object.assign(data.notices.find(x => x.id === id), patch);
       else data.notices.unshift({ id: Date.now(), active: true, created_at: new Date().toISOString(), ...patch });
@@ -323,6 +327,7 @@ function viewStock() {
       return `
       <tr class="grp ${p.active ? '' : 'off'}" data-pid="${p.id}"><td colspan="6"><span class="sorter"><button type="button" data-mv="-1" data-pid="${p.id}" title="위로" ${pi === 0 ? 'disabled' : ''}>▲</button><button type="button" data-mv="1" data-pid="${p.id}" title="아래로" ${pi === A.products.length - 1 ? 'disabled' : ''}>▼</button></span>${pi + 1}. ${esc(p.name)} <span class="mut" style="font-weight:400">· ${esc(p.category || '')}</span></td>
         <td><div class="flags">
+          <label class="small arr-in" title="재고가 0일 때 딜러 화면에 '○○ 입고 예정'으로 표시됩니다. 재고가 들어오면 자동으로 '바로 출고'가 됩니다.">입고 예정 <input data-parr="${p.id}" value="${esc(p.arrival)}" placeholder="예) 10월 중"></label>
           <label class="small"><input type="checkbox" class="toggle" data-pflag="is_new" data-pid="${p.id}" ${p.is_new ? 'checked' : ''}> <span class="fl-new">NEW</span></label>
           <label class="small"><input type="checkbox" class="toggle" data-pflag="is_best" data-pid="${p.id}" ${p.is_best ? 'checked' : ''}> <span class="fl-best">BEST</span></label>
           <label class="small"><input type="checkbox" class="toggle" data-pact="${p.id}" ${p.active ? 'checked' : ''}> 상품 노출</label>
@@ -389,6 +394,11 @@ function viewStock() {
       for (const x of changes) await api.updProduct(x.p.id, { sort: x.sort });
       await reload(); viewStock(); toast('노출 순서를 바꿨습니다');
     } catch (e) { toast(errMsg(e), 4000); }
+  });
+  $$('[data-parr]').forEach(inp => inp.onchange = async () => {
+    const val = inp.value.trim().replace(/\s*입고\s*예정$/, '') || null;   // '10월 중 입고 예정'이라고 적어도 '10월 중'만 저장
+    try { await api.updProduct(+inp.dataset.parr, { arrival: val }); await reload(); viewStock(); toast(val ? `입고 예정: ${val}` : '입고 예정 표시를 지웠습니다'); }
+    catch (e) { toast(errMsg(e), 4000); }
   });
   $$('[data-pflag]').forEach(cb => cb.onchange = async () => {
     const k = cb.dataset.pflag, nm = k === 'is_new' ? 'NEW' : 'BEST';
@@ -515,6 +525,7 @@ function viewSettings() {
       </div>
       <div class="field"><label>계좌번호</label><input name="bank_account" value="${esc(s.bank_account)}"></div>
       <h2 style="margin-top:18px">주문 · 배송</h2>
+      <div class="field"><label class="check"><input type="checkbox" name="show_tags" ${s.show_tags ? 'checked' : ''}> <span><b>NEW · BEST 표시</b> — 켜면 딜러 화면에 NEW·BEST 태그와 홈의 신규 입고·베스트 섹션이 나타나요 (가오픈 동안은 꺼 두기)</span></label></div>
       <div class="field open-sw">
         <label class="check"><input type="checkbox" name="orders_open" ${s.orders_open === false ? '' : 'checked'}> <span><b>주문 받기</b> — 끄면 딜러는 장바구니·견적서까지만 쓰고 주문은 할 수 없어요 (관리자 계정은 테스트 주문 가능)</span></label>
         <textarea name="orders_closed_msg" rows="2" placeholder="주문을 닫았을 때 장바구니에 보이는 안내" style="margin-top:8px">${esc(s.orders_closed_msg)}</textarea>
@@ -556,7 +567,7 @@ function viewSettings() {
     const qty_discounts = [0, 1, 2].map(i => ({ min: n('tmin' + i), rate: n('trate' + i) })).filter(x => x.min && x.rate).sort((a, b) => a.min - b.min);
     if (qty_discounts.some(x => x.rate >= 100)) return toast('할인율은 100% 미만이어야 합니다');
     const patch = { bank_name: t('bank_name'), bank_holder: t('bank_holder'), bank_account: t('bank_account'),
-      pay_deadline_days: n('pay_deadline_days') || 3, auto_deliver_days: n('auto_deliver_days') || 3, same_day_cutoff: t('same_day_cutoff'), orders_open: f.orders_open.checked, orders_closed_msg: t('orders_closed_msg'), shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
+      pay_deadline_days: n('pay_deadline_days') || 3, auto_deliver_days: n('auto_deliver_days') || 3, same_day_cutoff: t('same_day_cutoff'), orders_open: f.orders_open.checked, show_tags: f.show_tags.checked, orders_closed_msg: t('orders_closed_msg'), shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
       notice: t('notice'), ship_info: t('ship_info'), qty_discounts,
       biz_name: t('biz_name'), biz_owner: t('biz_owner'), biz_no: t('biz_no'), mail_order_no: t('mail_order_no'), biz_addr: t('biz_addr'),
       biz_phone: t('biz_phone'), biz_email: t('biz_email'), privacy_officer: t('privacy_officer') };
@@ -730,6 +741,14 @@ async function viewActivity(force) {
   const ago = t => { const m = Math.round((Date.now() - new Date(t)) / 6e4); return m < 60 ? `${Math.max(m, 1)}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
   const cartLines = c => (c?.items || []).map(it => { const v = vari(it.variant_id), p = v && prod(v.product_id); return v && p ? { p, v, qty: it.qty, amt: v.price * it.qty } : null; }).filter(Boolean);
   const carts = A.act.carts.filter(c => cartLines(c).length);
+  const restock = A.act.restock || [];
+  const dealer = id => A.dealers.find(d => d.id === id);
+  // 입고 알림 신청: 상품별로 묶기 (필터: 전체 / 특정 상품)
+  const rsProducts = [...new Set(restock.map(q => q.product_id))].map(prod).filter(Boolean);
+  const rsFilter = rsProducts.some(p => p.id === A.rsFilter) ? A.rsFilter : 0;
+  const rsRows = restock.filter(q => !rsFilter || q.product_id === rsFilter).map(q => ({ q, p: prod(q.product_id), d: dealer(q.dealer_id) })).filter(x => x.p && x.d);
+  const rsWaiting = rsRows.filter(x => !x.q.notified_at);
+  const stockOf = pid => A.variants.filter(v => v.product_id === pid).reduce((a, v) => a + v.stock, 0);
 
   // 상품별: 조회수 · 본 딜러 수 · 비회원 조회 · 장바구니 담은 딜러/수량
   const ps = A.products.map(p => {
@@ -748,7 +767,8 @@ async function viewActivity(force) {
     const top = Object.entries(byP).map(([pid, x]) => ({ p: prod(+pid), ...x })).filter(x => x.p).sort((a, b) => b.n - a.n);
     const last = [dv[0]?.viewed_at, lines.length ? cart.updated_at : null].filter(Boolean).sort().pop();
     const orders = A.orders.filter(o => o.dealer_id === d.id && o.status !== 'cancelled').length;
-    return { d, views: dv.length, top, lines, cart, amt: lines.reduce((a, l) => a + l.amt, 0), last, orders };
+    const asks = restock.filter(q => q.dealer_id === d.id).map(q => ({ ...q, p: prod(q.product_id) })).filter(q => q.p);
+    return { d, views: dv.length, top, lines, cart, amt: lines.reduce((a, l) => a + l.amt, 0), last, orders, asks };
   }).sort((a, b) => (b.lines.length ? 1 : 0) - (a.lines.length ? 1 : 0) || b.amt - a.amt || b.views - a.views);
   const guestViews = views.filter(v => !v.dealer_id).length;
 
@@ -773,6 +793,22 @@ async function viewActivity(force) {
     </section>
   </div>
 
+  <section class="panel rs-panel">
+    <div class="rs-head">
+      <h2>입고 알림 신청 <span class="mut small">대기 ${restock.filter(q => !q.notified_at).length}건 · 전체 ${restock.length}건</span></h2>
+      <div class="row-btns">
+        <select id="rsfilter"><option value="0">전체 상품</option>${rsProducts.map(p => `<option value="${p.id}" ${p.id === rsFilter ? 'selected' : ''}>${esc(p.name)} (${restock.filter(q => q.product_id === p.id && !q.notified_at).length}명 대기)</option>`).join('')}</select>
+        <button class="btn sm ghost" id="rscopy" ${rsWaiting.length ? '' : 'disabled'}>이메일 복사</button>
+        <button class="btn sm ghost" id="rsphone" ${rsWaiting.length ? '' : 'disabled'}>전화번호 복사</button>
+        ${rsFilter ? `<button class="btn sm pri" id="rssend" ${rsWaiting.length ? '' : 'disabled'}>입고 안내 메일 보내기 (${rsWaiting.length}명)</button>` : ''}
+      </div>
+    </div>
+    ${rsFilter ? `<p class="small ${stockOf(rsFilter) ? 'mut' : ''}" style="margin:0 0 10px;${stockOf(rsFilter) ? '' : 'color:var(--bad)'}">${stockOf(rsFilter) ? `현재 재고 ${won(stockOf(rsFilter))}개 · 메일을 보내면 딜러가 바로 주문할 수 있어요.` : '아직 재고가 0이에요. 재고·가격에서 재고를 먼저 넣은 뒤 메일을 보내세요.'}</p>` : '<p class="small mut" style="margin:0 0 10px">상품을 고르면 그 상품을 기다리는 딜러에게 입고 안내 메일을 한 번에 보낼 수 있어요. 복사 버튼은 아직 안내하지 않은(대기) 딜러만 복사합니다.</p>'}
+    ${rsRows.length ? `<table class="tbl act-tbl"><thead><tr><th>상품</th><th>딜러</th><th>담당자 · 연락처</th><th>이메일</th><th>신청</th><th>상태</th></tr></thead><tbody>
+      ${rsRows.map(x => `<tr class="${x.q.notified_at ? 'rs-done' : ''}"><td>${esc(x.p.name)}${x.p.arrival ? ` <span class="mut small">${esc(x.p.arrival)}</span>` : ''}</td><td>${esc(x.d.company)} ${esc(x.d.branch || '')}</td><td>${esc(x.d.manager_name)} <span class="mut small">${esc(x.d.phone || '')}</span></td><td class="small">${esc(x.d.email)}</td><td class="small">${ago(x.q.created_at)}</td><td>${x.q.notified_at ? `<span class="badge st-paid">안내함 · ${fmtDT(x.q.notified_at).slice(5, 10)}</span>` : '<span class="badge st-pending_payment">대기</span>'}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="mut small">아직 입고 알림 신청이 없습니다.</div>'}
+  </section>
+
   <h2 style="margin:30px 0 12px">딜러별 <span class="mut small" style="font-weight:400">승인된 딜러 ${rows.length}명 · 장바구니 담은 딜러 ${rows.filter(r => r.lines.length).length}명</span></h2>
   <div class="act-list">
   ${rows.map(r => `
@@ -781,17 +817,33 @@ async function viewActivity(force) {
         <div class="who"><b>${esc(r.d.company)} ${esc(r.d.branch || '')}</b><span>${esc(r.d.manager_name)}${r.d.position ? ' ' + esc(r.d.position) : ''} · ${esc(r.d.phone || '')}</span></div>
         <div class="st"><small>상품 조회</small><b>${r.views}</b></div>
         <div class="st"><small>장바구니</small><b class="${r.lines.length ? 'hl' : ''}">${r.lines.length ? `${r.lines.length}품목 · ${won(r.amt)}원` : '-'}</b></div>
+        <div class="st"><small>입고 알림</small><b class="${r.asks.some(q => !q.notified_at) ? 'hl' : ''}">${r.asks.length ? `${r.asks.length}건` : '-'}</b></div>
         <div class="st"><small>주문</small><b>${r.orders}건</b></div>
         <div class="st"><small>최근 활동</small><b>${r.last ? ago(r.last) : '-'}</b></div>
       </summary>
       <div class="act-body">
         <div><h4>많이 본 상품 (최근 ${days}일)</h4>${r.top.length ? `<ul>${r.top.map(x => `<li><span>${esc(x.p.name)}</span><span class="mut">${x.n}회 · ${ago(x.last)}</span></li>`).join('')}</ul>` : '<div class="mut small">조회 기록 없음</div>'}</div>
+        ${r.asks.length ? `<div class="full"><h4>입고 알림 신청</h4><ul>${r.asks.map(q => `<li><span>${esc(q.p.name)}${q.p.arrival ? ` <span class="mut">· ${esc(q.p.arrival)}</span>` : ''}</span><span class="mut">${q.notified_at ? '안내함' : '대기'} · ${ago(q.created_at)} 신청</span></li>`).join('')}</ul></div>` : ''}
         <div><h4>장바구니 ${r.lines.length ? `<span class="mut small">${ago(r.cart.updated_at)} 수정</span>` : ''}</h4>${r.lines.length ? `<ul>${r.lines.map(l => `<li><span>${esc(l.p.name)} <span class="mut">· ${esc(l.v.option_name)}</span></span><span>${won(l.qty)}개 · ${won(l.amt)}원</span></li>`).join('')}<li class="sum"><span>합계 (할인 전 공급가)</span><b>${won(r.amt)}원</b></li></ul>` : '<div class="mut small">비어 있음</div>'}</div>
       </div>
     </details>`).join('')}
   </div>`;
   $$('[data-days]').forEach(b => b.onclick = () => { A.actDays = +b.dataset.days; viewActivity(); });
   $('#actre').onclick = () => viewActivity(true);
+  $('#rsfilter').onchange = e => { A.rsFilter = +e.target.value; viewActivity(); };
+  const copyList = async (vals, what) => {
+    const list = [...new Set(vals.filter(Boolean))];
+    try { await navigator.clipboard.writeText(list.join(', ')); toast(`${what} ${list.length}개를 복사했습니다`); }
+    catch (e) { prompt(`${what} (복사해서 쓰세요)`, list.join(', ')); }
+  };
+  $('#rscopy').onclick = () => copyList(rsWaiting.map(x => x.d.email), '이메일');
+  $('#rsphone').onclick = () => copyList(rsWaiting.map(x => x.d.phone), '전화번호');
+  if ($('#rssend')) $('#rssend').onclick = async () => {
+    const p = prod(rsFilter);
+    if (!await ask(`'${p.name}' 입고 안내 메일을 ${rsWaiting.length}명에게 보낼까요?\n보낸 뒤에는 '안내함'으로 바뀌고 다시 보내지 않습니다.`, { ok: '메일 보내기' })) return;
+    try { const n = await api.notifyRestock(rsFilter); toast(`${n}명에게 입고 안내 메일을 보냈습니다`); viewActivity(true); }
+    catch (e) { toast(errMsg(e), 4000); }
+  };
 }
 
 function editDealer(id) {

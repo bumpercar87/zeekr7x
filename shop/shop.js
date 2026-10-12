@@ -67,6 +67,13 @@ const api = DEMO ? demoApi() : {
     if (error) throw error;
   },
   async logView(pid) { await sb.rpc('log_view', { p_product_id: pid }); },
+  // 입고 알림 신청
+  async myRestock() {
+    const { data, error } = await sb.from('restock_requests').select('product_id').eq('dealer_id', S.user.id);
+    if (error) throw error; return (data || []).map(r => r.product_id);
+  },
+  async addRestock(pid) { const { error } = await sb.from('restock_requests').upsert({ dealer_id: S.user.id, product_id: pid }, { onConflict: 'dealer_id,product_id', ignoreDuplicates: true }); if (error) throw error; },
+  async delRestock(pid) { const { error } = await sb.from('restock_requests').delete().eq('dealer_id', S.user.id).eq('product_id', pid); if (error) throw error; },
   // 비회원 둘러보기: 상품 + 옵션 이름·사진 (가격·재고 없음)
   async publicCatalog() {
     const [p, v] = await Promise.all([
@@ -181,13 +188,16 @@ function demoApi() {
       store('zk_demo_inq', list);
     },
     async publicProducts() { return (await (await fetch('demo_products.json', { cache: 'no-store' })).json()); },
+    async myRestock() { return (store('zk_demo_restock') || []).map(r => r.product_id); },
+    async addRestock(pid) { const l = (store('zk_demo_restock') || []).filter(r => r.product_id !== pid); l.push({ dealer_id: 'demo', product_id: pid, created_at: new Date().toISOString(), notified_at: null }); store('zk_demo_restock', l); },
+    async delRestock(pid) { store('zk_demo_restock', (store('zk_demo_restock') || []).filter(r => r.product_id !== pid)); },
     async getCart() { return store('zk_demo_cartsrv'); },
     async saveCart(items) { store('zk_demo_cartsrv', { items, updated_at: new Date().toISOString() }); },
     async logView(pid) { const l = store('zk_demo_views') || []; l.push({ dealer_id: S.user ? 'demo' : null, product_id: pid, viewed_at: new Date().toISOString() }); store('zk_demo_views', l); },
     async publicCatalog() {
       const products = await (await fetch('demo_products.json', { cache: 'no-store' })).json();
       const vs = await (await fetch('demo_variants.json', { cache: 'no-store' })).json();
-      return { products, variants: vs.map(({ id, product_id, option_name, image, sort }) => ({ id, product_id, option_name, image, sort })) };
+      return { products, variants: vs.map(({ id, product_id, option_name, image, sort, stock }) => ({ id, product_id, option_name, image, sort, in_stock: stock > 0 })) };
     },
     async publicInfo() { return { biz_name: '브링고', biz_email: 'bringgoglobal@gmail.com' }; },
     async signIn() { store('zk_demo_in', 1); },
@@ -545,26 +555,37 @@ function viewNotice(title, html, toLogin) {
 const GUEST_BAR = '<div class="guest-bar"><span><b>비회원 둘러보기</b> · 공급가와 주문은 딜러 가입 승인 후 이용할 수 있어요.</span><a class="btn pri sm" href="#/signup">가입 신청</a></div>';
 const LOCKED_PRICE = '<div class="price locked"><span class="blur" aria-hidden="true">88,000원</span><small>회원 전용가</small></div>';
 
+// 상태: now = 재고 있음(바로 출고) / soon = 재고 없고 입고 예정 시기 있음 / out = 품절
 function productSummary(p) {
   const vs = S.variants.filter(v => v.product_id === p.id);
-  if (S.guest) return { vs, min: 0, max: 0, stock: 1, low: false };   // 비회원은 가격·재고를 모름
+  const st = has => has ? 'now' : (p.arrival ? 'soon' : 'out');
+  if (S.guest) {   // 비회원은 가격·수량을 모르고 재고 유무만 앎
+    const has = vs.some(v => v.in_stock !== false);
+    return { vs, min: 0, max: 0, stock: has ? 1 : 0, low: false, status: st(has) };
+  }
   const prices = vs.map(v => v.price);
   const min = Math.min(...prices), max = Math.max(...prices);
   const stock = vs.reduce((a, v) => a + v.stock, 0);
   const low = vs.some(v => v.stock > 0 && v.stock <= 5);
-  return { vs, min, max, stock, low };
+  return { vs, min, max, stock, low, status: st(stock > 0) };
 }
+const statusOf = p => productSummary(p).status;
+const arrivalLabel = p => `${p.arrival} 입고 예정`;
+const STATUS_ORDER = { now: 0, soon: 1, out: 2 };
+const byAvail = (a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || (statusOf(a) === 'soon' ? String(a.arrival).localeCompare(String(b.arrival), 'ko', { numeric: true }) : 0);
 
-const tagsHtml = p => `${p.is_best ? '<span class="tagb best">BEST</span>' : ''}${p.is_new ? '<span class="tagb new">NEW</span>' : ''}`;
+// NEW·BEST 는 관리자 설정(show_tags)을 켰을 때만. 평소엔 입고 상태 태그만 보여줌
+const tagsHtml = p => S.settings.show_tags ? `${p.is_best ? '<span class="tagb best">BEST</span>' : ''}${p.is_new ? '<span class="tagb new">NEW</span>' : ''}` : '';
+const statusTag = (p, status) => status === 'now' ? '<span class="tagb now">바로 출고</span>' : status === 'soon' ? `<span class="tagb soon">${esc(arrivalLabel(p))}</span>` : '';
 
 function productCard(p) {
   const s = productSummary(p);
   if (!s.vs.length) return '';
   return `
-  <a class="card ${s.stock ? '' : 'out'}" href="#/p/${p.id}">
+  <a class="card ${s.status === 'out' ? 'out' : ''}" href="#/p/${p.id}">
     <div class="ph"><img src="${thumb(p.image)}" alt="" loading="lazy">
-      ${tagsHtml(p) ? `<span class="tags">${tagsHtml(p)}</span>` : ''}
-      ${!s.stock ? '<span class="soldout">품절</span>' : ''}</div>
+      <span class="tags">${statusTag(p, s.status)}${tagsHtml(p)}</span>
+      ${s.status === 'out' ? '<span class="soldout">품절</span>' : ''}</div>
     <div class="cat">${esc(p.category || '')} · 옵션 ${s.vs.length}</div>
     <h3>${esc(p.name)}</h3>
     ${S.guest ? LOCKED_PRICE : `<div class="price">${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>`}
@@ -575,13 +596,14 @@ function productCard(p) {
 
 function viewShop() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
-  const SPECIAL = { NEW: ['NEW 신상품', p => p.is_new], BEST: ['BEST 베스트', p => p.is_best] };
+  const SPECIAL = { NOW: ['바로 출고', p => statusOf(p) === 'now'], SOON: ['입고 예정', p => statusOf(p) === 'soon'],
+    ...(S.settings.show_tags ? { NEW: ['NEW 신상품', p => p.is_new], BEST: ['BEST 베스트', p => p.is_best] } : {}) };
   const match = (p, c) => c === '전체' || (SPECIAL[c] ? SPECIAL[c][1](p) : p.category === c);
   const count = c => sellable.filter(p => match(p, c)).length;
   const label = c => SPECIAL[c] ? SPECIAL[c][0] : c;
   const cats = ['전체', ...Object.keys(SPECIAL).filter(c => count(c)), ...new Set(sellable.map(p => p.category).filter(Boolean))];
   if (!cats.includes(S.filter)) S.filter = '전체';
-  const list = sellable.filter(p => match(p, S.filter));
+  const list = sellable.filter(p => match(p, S.filter)).sort(byAvail);   // 바로 출고 → 입고 예정 → 품절
   const st = S.settings;
   app().innerHTML = `
   <div class="page-head">
@@ -619,7 +641,11 @@ function viewShop() {
 // ---------------------------------------------------------------- 홈
 function viewHome() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
-  const news = sellable.filter(p => p.is_new).slice(0, 4), bests = sellable.filter(p => p.is_best).slice(0, 4);
+  const tagsOn = S.settings.show_tags;
+  const news = tagsOn ? sellable.filter(p => p.is_new).slice(0, 4) : [], bests = tagsOn ? sellable.filter(p => p.is_best).slice(0, 4) : [];
+  const nowList = sellable.filter(p => statusOf(p) === 'now');
+  const soonGroups = {};
+  sellable.filter(p => statusOf(p) === 'soon').sort(byAvail).forEach(p => (soonGroups[p.arrival] = soonGroups[p.arrival] || []).push(p));
   const tiers = tierText(S.settings);
   app().innerHTML = `
   <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${personName(S.dealer)}님, 안녕하세요</h1><p class="mut" style="margin:6px 0 0">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</p></div>
@@ -634,6 +660,8 @@ function viewHome() {
     </div>
   </div>
   ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
+  ${nowList.length ? `<div class="sec-h"><h2>지금 주문 가능 <span class="sec-n">${nowList.length}</span></h2><a href="#/products" data-goto="NOW">바로 출고 상품 전체 →</a></div><div class="row4">${nowList.map(productCard).join('')}</div>` : ''}
+  ${Object.entries(soonGroups).map(([when, ps]) => `<div class="sec-h soon"><h2>${esc(when)} 입고 예정 <span class="sec-n">${ps.length}</span></h2><a href="#/products" data-goto="SOON">입고 예정 전체 →</a></div><div class="row4">${ps.map(productCard).join('')}</div>`).join('')}
   ${news.length ? `<div class="sec-h"><h2>신규 입고</h2><a href="#/products" data-goto="NEW">신상품 전체 →</a></div><div class="row4">${news.map(productCard).join('')}</div>` : ''}
   ${bests.length ? `<div class="sec-h"><h2>베스트 상품</h2><a href="#/products" data-goto="BEST">베스트 전체 →</a></div><div class="row4">${bests.map(productCard).join('')}</div>` : ''}
   <div class="home-more"><a class="btn pri" href="#/products" data-goto="전체">전체 상품 보기 (${sellable.length})</a>
@@ -743,7 +771,11 @@ function viewProduct(id) {
   const p = product(+id);
   if (!p) return viewShop();
   if (Date.now() - (store('zk_v_' + p.id) || 0) > 6e5) { store('zk_v_' + p.id, Date.now()); api.logView(p.id).catch(() => {}); }
-  const { vs, min, max } = productSummary(p);
+  const { vs, min, max, status } = productSummary(p);
+  const canBuy = !S.guest && status === 'now';
+  const someOut = !S.guest && vs.some(v => !v.stock);
+  const asked = () => S.restock?.has(p.id);
+  const restockBtn = cls => `<button class="btn ${cls}" data-restock type="button">${asked() ? '✓ 입고 알림 신청됨 (누르면 취소)' : '입고되면 알려주세요'}</button>`;
   const picks = [];          // 고른 옵션들 [{ v, qty }]
   const pics = [...new Set([p.image, ...(p.images || []), ...vs.map(v => v.image)].filter(Boolean))];
   const details = p.detail_images || [];
@@ -761,25 +793,28 @@ function viewProduct(id) {
       ${pics.length > 1 ? `<div class="thumbs">${pics.map((s, i) => `<img src="${thumb(s)}" data-i="${i}" class="${i ? '' : 'on'}" alt="" loading="lazy">`).join('')}</div>` : ''}
     </div>
     <div>
-      <div class="cat">${esc(p.category || '')}${tagsHtml(p) ? ` <span class="tags">${tagsHtml(p)}</span>` : ''}</div>
+      <div class="cat">${esc(p.category || '')} <span class="tags">${statusTag(p, status)}${tagsHtml(p)}</span></div>
       <h1>${esc(p.name)}</h1>
       <p class="sub">${esc(p.subtitle || '')}</p>
       ${S.guest ? `<div class="price locked-pd"><span class="blur" aria-hidden="true">88,000원</span><small>회원 전용가 · 가입 승인 후 공개</small></div>`
         : `<div class="price"><span>${won(min)}원${max > min ? '~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>`}
-      <div class="opt-label"><span>${S.guest ? '옵션' : '옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span>'}</span></div>
+      ${status === 'soon' ? `<div class="arrive-line"><b>${esc(arrivalLabel(p))}</b> · 입고되면 주문할 수 있어요</div>` : status === 'out' ? '<div class="arrive-line out"><b>품절</b> · 재입고 일정은 문의해 주세요</div>' : ''}
+      <div class="opt-label"><span>${!canBuy ? '옵션' : '옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span>'}</span></div>
       <div class="opts">${vs.map(v => `
-        <button class="opt ${v.stock || S.guest ? '' : 'out'}" data-v="${v.id}">
+        <button class="opt ${v.stock || !canBuy ? '' : 'out'}" data-v="${v.id}">
           ${v.image ? `<img src="${thumb(v.image)}" alt="">` : '<span class="noimg">사진<br>준비중</span>'}
-          <span>${esc(v.option_name)}${v.stock || S.guest ? '' : '<span class="so">품절</span>'}${!S.guest && v.price !== min ? `<span class="op">${won(v.price)}원</span>` : ''}</span>
+          <span>${esc(v.option_name)}${v.stock || !canBuy ? '' : `<span class="so">${p.arrival ? '입고 예정' : '품절'}</span>`}${!S.guest && v.price !== min ? `<span class="op">${won(v.price)}원</span>` : ''}</span>
         </button>`).join('')}</div>
-      ${S.guest ? `<div class="guest-cta"><b>공급가 확인과 주문은 딜러 회원 전용이에요</b><p>지커 딜러·장기렌트 파트너라면 가입 신청해 주세요. 승인되면 바로 공급가를 보고 주문할 수 있어요.</p><div class="gc-btns"><a class="btn pri" href="#/signup">가입 신청</a><a class="btn" href="#/login">로그인</a></div></div>` : `
+      ${S.guest ? `<div class="guest-cta"><b>공급가 확인과 주문은 딜러 회원 전용이에요</b><p>지커 딜러·장기렌트 파트너라면 가입 신청해 주세요. 승인되면 바로 공급가를 보고 주문할 수 있어요.</p><div class="gc-btns"><a class="btn pri" href="#/signup">가입 신청</a><a class="btn" href="#/login">로그인</a></div></div>`
+      : !canBuy ? `<div class="restock-box"><b>${status === 'soon' ? esc(arrivalLabel(p)) + ' 상품이에요' : '지금은 품절이에요'}</b><p>입고 알림을 신청해 두시면 들어오는 대로 메일로 알려 드릴게요. 예약 주문·선입금은 받지 않아요.</p>${restockBtn('pri block')}</div>` : `
       <div class="picks" id="picks"></div>
       <div class="pick-total" id="ptotal"></div>
       <div class="buy">
         <button class="btn" id="add" style="flex:1">장바구니 담기</button>
         <button class="btn pri" id="buynow" style="flex:1">바로 주문하기</button>
       </div>
-      <p class="bulk"><a href="#/inquiries/new?cat=${encodeURIComponent('대량 견적')}&product=${p.id}">재고보다 많이 필요하신가요? <b>대량 견적 문의 →</b></a></p>`}
+      <p class="bulk"><a href="#/inquiries/new?cat=${encodeURIComponent('대량 견적')}&product=${p.id}">재고보다 많이 필요하신가요? <b>대량 견적 문의 →</b></a></p>
+      ${someOut ? `<p class="restock-mini">품절된 옵션이 필요하신가요? ${restockBtn('sm ghost')}</p>` : ''}`}
       <ul class="feats">${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       ${p.info ? `<table class="pinfo">${p.info.split('\n').filter(Boolean).map(l => { const [k, ...r] = l.split(':'); return r.length ? `<tr><th>${esc(k.trim())}</th><td>${esc(r.join(':').trim())}</td></tr>` : `<tr><td colspan="2">${esc(l)}</td></tr>`; }).join('')}</table>` : ''}
       ${S.settings.ship_info ? `<div class="shipinfo"><b>배송 · 교환 안내</b><div>${esc(S.settings.ship_info)}</div></div>` : ''}
@@ -826,7 +861,7 @@ function viewProduct(id) {
     render();
   };
   const pick = v => {
-    if (S.guest) { if (v.image) goSlide(pics.indexOf(v.image)); return; }   // 비회원: 사진만 보여줌
+    if (!canBuy) { if (v.image) goSlide(pics.indexOf(v.image)); return; }   // 비회원·입고 예정: 사진만 보여줌
     if (!v.stock) return toast('품절된 옵션입니다');
     if (!avail(v)) return toast('이미 재고만큼 장바구니에 담겨 있습니다');
     if (!picks.some(x => x.v.id === v.id)) picks.push({ v, qty: Math.min(v.min_qty || 1, avail(v)) });
@@ -856,7 +891,17 @@ function viewProduct(id) {
   }, { passive: true });
   $$('.thumbs img').forEach(t => t.onclick = () => goSlide(+t.dataset.i));
   $$('.gnav').forEach(b => b.onclick = () => goSlide((cur + +b.dataset.g + pics.length) % pics.length));
-  if (S.guest) return;
+  // 입고 알림 신청 / 취소
+  $$('[data-restock]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      if (asked()) { await api.delRestock(p.id); S.restock.delete(p.id); toast('입고 알림 신청을 취소했습니다'); }
+      else { await api.addRestock(p.id); (S.restock = S.restock || new Set()).add(p.id); toast('입고되면 메일로 알려 드릴게요'); }
+      $$('[data-restock]').forEach(x => x.textContent = asked() ? '✓ 입고 알림 신청됨 (누르면 취소)' : '입고되면 알려주세요');
+    } catch (e) { toast(errMsg(e)); }
+    b.disabled = false;
+  });
+  if (!canBuy) return;
   $('#add').onclick = $('#madd').onclick = () => { const n = commit(); toast(`${n}개를 장바구니에 담았습니다`); render(); };
   $('#buynow').onclick = () => { commit(); location.hash = '#/cart'; };
   $('#mbuy').onclick = () => { if (!picks.length) return $('.opts').scrollIntoView({ behavior: 'smooth', block: 'center' }); commit(); location.hash = '#/cart'; };
@@ -1430,7 +1475,8 @@ async function boot() {
     if (S.dealer.status === 'rejected') return viewNotice('가입이 승인되지 않았습니다', '자세한 내용은 관리자에게 문의해 주세요.');
     Object.assign(S, await api.catalog());
     await syncCart();
-    const [ns] = await Promise.allSettled([api.notices(), loadOrders(), loadInquiries()]);
+    const [ns, rs] = await Promise.allSettled([api.notices(), api.myRestock(), loadOrders(), loadInquiries()]);
+    S.restock = new Set(rs.status === 'fulfilled' ? rs.value : []);
     S.notices = ns.status === 'fulfilled' ? ns.value : [];
     route();
   } catch (e) {
