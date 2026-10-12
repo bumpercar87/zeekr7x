@@ -674,3 +674,6 @@ ul.inq-guide b{color:var(--ink)}
 /* 카드의 옵션 표시: 사진 없으면 글자 칩 */
 .card .dots{flex-wrap:wrap;align-items:center}
 .card .dots .dchip{height:26px;display:inline-flex;align-items:center;padding:0 8px;border:1px solid var(--hair2);border-radius:var(--r);background:#fff;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+
+/* 옵션 선택 안내 (고르기 전) */
+.pick-hint{color:var(--acc);font-weight:800;font-size:16px}
