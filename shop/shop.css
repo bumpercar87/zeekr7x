@@ -606,3 +606,10 @@ ul.inq-guide b{color:var(--ink)}
 /* 주문 일시 중지 안내 (장바구니) */
 .closed-note{background:#fff6f2;border:1px solid #f2c9b8;padding:12px 14px;margin:0 0 10px;font-size:14.5px;line-height:1.55;color:var(--ink2)}
 .closed-note b{display:block;color:var(--acc);margin-bottom:2px}
+
+/* 하단 사업자 정보: 눌러야 펼쳐짐 */
+.ft-biz summary{display:inline-flex;align-items:center;gap:6px;cursor:pointer;list-style:none;color:var(--ink2);font-size:13.5px;padding:2px 0}
+.ft-biz summary::-webkit-details-marker{display:none}
+.ft-biz summary::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .15s}
+.ft-biz[open] summary::after{transform:rotate(-135deg) translateY(-2px)}
+.ft-biz .ft-info{margin-top:8px}

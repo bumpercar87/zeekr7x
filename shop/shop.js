@@ -419,15 +419,14 @@ function contactLine() {
 function renderFooter() {
   const i = S.info, f = $('#foot');
   if (!f) return;
-  const v = x => x || '<span class="mut">(설정 필요)</span>';
+  // 값이 있는 항목만 표시 (주소는 화면에 노출하지 않음 · 거래명세서 등 서류에만 사용)
+  const row = (k, x) => x ? `<span>${k} ${esc(x)}</span>` : '';
+  const rows = [row('상호', i.biz_name), row('대표', i.biz_owner), row('사업자등록번호', i.biz_no), row('통신판매업 신고', i.mail_order_no),
+    row('연락처', [i.biz_phone, i.biz_email].filter(Boolean).join(' · ')), row('개인정보 관리책임자', i.privacy_officer)].join('');
   f.innerHTML = `<div class="wrap">
     <img class="ft-logo" src="img/brand/bringgo_pc_line_black.png" alt="bringgo" width="116" height="50">
     <div class="ft-links"><a href="#/terms">이용약관</a><a href="#/privacy"><b>개인정보 처리방침</b></a>${S.user ? '<a href="#/inquiries">1:1 문의</a>' : ''}${window.KAKAO_CHANNEL_URL ? `<a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의</a>` : ''}</div>
-    <div class="ft-info">
-      <span>상호 ${v(esc(i.biz_name))}</span><span>대표 ${v(esc(i.biz_owner))}</span><span>사업자등록번호 ${v(esc(i.biz_no))}</span>
-      <span>통신판매업 신고 ${v(esc(i.mail_order_no))}</span><span>주소 ${v(esc(i.biz_addr))}</span>
-      <span>연락처 ${v(esc([i.biz_phone, i.biz_email].filter(Boolean).join(' · ')))}</span><span>개인정보 관리책임자 ${v(esc(i.privacy_officer))}</span>
-    </div>
+    ${rows ? `<details class="ft-biz"><summary>사업자 정보</summary><div class="ft-info">${rows}</div></details>` : ''}
     <div class="ft-copy">© ${new Date().getFullYear()} ${esc(i.biz_name || 'BRINGGO')}. 딜러 전용 B2B 주문 사이트</div>
   </div>`;
 }
