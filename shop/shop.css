@@ -670,3 +670,7 @@ ul.inq-guide b{color:var(--ink)}
 .opts.txtonly{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .opt.txt.on{background:var(--ink);color:#fff}
 .opt.txt.on .od,.opt.txt.on .op{color:rgba(255,255,255,.75)}
+
+/* 카드의 옵션 표시: 사진 없으면 글자 칩 */
+.card .dots{flex-wrap:wrap;align-items:center}
+.card .dots .dchip{height:26px;display:inline-flex;align-items:center;padding:0 8px;border:1px solid var(--hair2);border-radius:var(--r);background:#fff;font-size:12.5px;color:var(--ink2);white-space:nowrap}

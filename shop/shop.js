@@ -592,7 +592,7 @@ function productCard(p) {
     <h3>${esc(p.name)}</h3>
     ${S.guest ? LOCKED_PRICE : `<div class="price">${won(s.min)}<small>원${s.max > s.min ? ' ~' : ''}</small></div>`}
     ${s.stock && s.low ? '<div class="low">재고 적음</div>' : ''}
-    ${s.vs.length > 1 ? `<div class="dots">${s.vs.slice(0, 6).filter(v => v.image).map(v => `<img src="${thumb(v.image)}" alt="" loading="lazy">`).join('')}</div>` : ''}
+    ${s.vs.length > 1 ? `<div class="dots">${s.vs.slice(0, 6).map(v => v.image ? `<img src="${thumb(v.image)}" alt="" loading="lazy">` : `<span class="dchip">${esc(String(v.option_name).replace(/\s*\(.+\)\s*$/, ''))}</span>`).join('')}</div>` : ''}
   </a>`;
 }
 
