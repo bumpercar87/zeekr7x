@@ -660,8 +660,8 @@ function viewHome() {
     </div>
   </div>
   ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
-  ${nowList.length ? `<div class="sec-h"><h2>지금 주문 가능 <span class="sec-n">${nowList.length}</span></h2><a href="#/products" data-goto="NOW">바로 출고 상품 전체 →</a></div><div class="row4">${nowList.map(productCard).join('')}</div>` : ''}
-  ${Object.entries(soonGroups).map(([when, ps]) => `<div class="sec-h soon"><h2>${esc(when)} 입고 예정 <span class="sec-n">${ps.length}</span></h2><a href="#/products" data-goto="SOON">입고 예정 전체 →</a></div><div class="row4">${ps.map(productCard).join('')}</div>`).join('')}
+  ${nowList.length ? `<div class="sec-h big now"><div><span class="sec-k">바로 출고</span><h2>지금 주문 가능 <em>${nowList.length}</em></h2><p>재고가 있어 입금 확인 후 바로 보내 드려요</p></div><a href="#/products" data-goto="NOW">전체 보기 →</a></div><div class="row4">${nowList.map(productCard).join('')}</div>` : ''}
+  ${Object.entries(soonGroups).map(([when, ps]) => `<div class="sec-h big soon"><div><span class="sec-k">입고 예정</span><h2>${esc(when)} 입고 예정 <em>${ps.length}</em></h2><p>아직 주문은 안 돼요 · 상품에서 입고 알림을 신청해 두세요</p></div><a href="#/products" data-goto="SOON">전체 보기 →</a></div><div class="row4">${ps.map(productCard).join('')}</div>`).join('')}
   ${news.length ? `<div class="sec-h"><h2>신규 입고</h2><a href="#/products" data-goto="NEW">신상품 전체 →</a></div><div class="row4">${news.map(productCard).join('')}</div>` : ''}
   ${bests.length ? `<div class="sec-h"><h2>베스트 상품</h2><a href="#/products" data-goto="BEST">베스트 전체 →</a></div><div class="row4">${bests.map(productCard).join('')}</div>` : ''}
   <div class="home-more"><a class="btn pri" href="#/products" data-goto="전체">전체 상품 보기 (${sellable.length})</a>

@@ -629,3 +629,19 @@ ul.inq-guide b{color:var(--ink)}
 .restock-box b{font-size:16px}
 .restock-box p{font-size:14.5px;color:var(--ink2);margin:6px 0 14px;line-height:1.6}
 .restock-mini{font-size:14px;color:var(--mut);margin:12px 0 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* 홈 섹션 제목 크게 (지금 주문 가능 / 입고 예정) */
+.sec-h.big{align-items:flex-end;border-bottom:0;border-top:3px solid var(--ink);padding:18px 0 0;margin:52px 0 20px}
+.sec-h.big.soon{border-top-color:var(--acc)}
+.sec-h.big .sec-k{display:inline-block;font-size:12.5px;font-weight:800;letter-spacing:.04em;padding:3px 8px;color:#fff;background:var(--ink);margin-bottom:8px}
+.sec-h.big.soon .sec-k{background:var(--acc)}
+.sec-h.big h2{font-size:28px;font-weight:800;line-height:1.2;color:var(--ink);display:flex;align-items:center;gap:10px}
+.sec-h.big h2 em{font-style:normal;font-size:16px;font-weight:800;min-width:30px;height:30px;padding:0 9px;border-radius:15px;display:inline-flex;align-items:center;justify-content:center;background:var(--ink);color:#fff}
+.sec-h.big.soon h2 em{background:var(--acc)}
+.sec-h.big p{margin:6px 0 0;font-size:15px;color:var(--mut)}
+.sec-h.big > a{font-size:14.5px;color:var(--ink2);white-space:nowrap;padding-bottom:2px}
+@media (max-width:860px){
+  .sec-h.big{margin:38px 0 16px;padding-top:14px}
+  .sec-h.big h2{font-size:23px}
+  .sec-h.big p{font-size:14px}
+}
