@@ -690,3 +690,7 @@ ul.inq-guide b{color:var(--ink)}
 .cats button.sp-soon span:first-child{color:var(--ink2)}
 .arrive-line{background:var(--wash);border-color:var(--hair2)}
 .arrive-line b{color:var(--ink)}
+
+/* 가입 대기 화면: 메일 수신 안내 */
+.mail-tip{display:block;margin-top:18px;padding:12px 14px;background:#fff6f2;border:1px solid #f2c9b8;font-size:14px;line-height:1.6;color:var(--ink2);text-align:left}
+.mail-tip b{color:var(--ink)}

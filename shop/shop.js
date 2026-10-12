@@ -1473,7 +1473,7 @@ async function boot() {
     S.dealer = await api.dealer(S.user.id);
     renderNav();
     if (!S.dealer) return viewNotice('계정 정보를 찾을 수 없습니다', '관리자에게 문의해 주세요.');
-    if (S.dealer.status === 'pending') return viewNotice('가입 신청이 완료되었습니다', `<b>${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</b> 가입 승인 대기 중입니다.<br>승인이 완료되면 <b>${esc(S.dealer.email)}</b>로 안내 메일을 보내드리며,<br>이후 공급가 확인과 주문이 가능합니다.`);
+    if (S.dealer.status === 'pending') return viewNotice('가입 신청이 완료되었습니다', `<b>${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</b> 가입 승인 대기 중입니다.<br>승인이 완료되면 <b>${esc(S.dealer.email)}</b>로 안내 메일을 보내드리며,<br>이후 공급가 확인과 주문이 가능합니다.<span class="mail-tip"><b>메일이 안 보이면 스팸함을 확인해 주세요.</b><br><b>${esc(S.info.biz_email || 'bringgoglobal@gmail.com')}</b>을 주소록(수신 허용)에 추가해 두시면 승인·주문·배송·입고 안내를 놓치지 않아요.</span>`);
     if (S.dealer.status === 'rejected') return viewNotice('가입이 승인되지 않았습니다', '자세한 내용은 관리자에게 문의해 주세요.');
     Object.assign(S, await api.catalog());
     await syncCart();
