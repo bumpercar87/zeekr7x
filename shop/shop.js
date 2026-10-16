@@ -25,6 +25,20 @@ const api = DEMO ? demoApi() : {
     const { data, error } = await sb.rpc('place_order', a);
     if (error) throw error; return data;
   },
+  // 카드 주문 생성 (30분 안에 결제하지 않으면 자동 취소) / 결제 승인 (서버에서 금액 검증)
+  async placeOrderCard(a) {
+    const { data, error } = await sb.rpc('place_order_card', a);
+    if (error) throw error; return data;
+  },
+  async confirmCard(body) {
+    const { data, error } = await sb.functions.invoke('toss-confirm', { body });
+    if (error) {
+      let msg = error.message;
+      try { msg = (await error.context.json()).message || msg; } catch (e) { /* 기본 메시지 */ }
+      throw new Error(msg);
+    }
+    return data;
+  },
   async orders() {
     const { data, error } = await sb.from('orders').select('*, order_items(*)').eq('dealer_id', S.user.id).order('created_at', { ascending: false });
     if (error) throw error; return data;
@@ -138,6 +152,17 @@ function demoApi() {
       return { products: data || [], variants, settings };
     },
     async stock() { return variants; },
+    async placeOrderCard(a) {
+      const r = await this.placeOrder({ ...a, p_depositor: null });
+      const o = orders.find(x => x.order_no === r.order_no);
+      Object.assign(o, { pay_method: 'card', depositor_name: null, pay_deadline: new Date(Date.now() + 30 * 6e4).toISOString() });
+      store('zk_demo_orders', orders); return r;
+    },
+    async confirmCard({ orderNo, paymentKey }) {
+      const o = orders.find(x => x.order_no === orderNo);
+      Object.assign(o, { status: 'paid', paid_at: new Date().toISOString(), payment_key: paymentKey, pay_info: { method: '카드', approvedAt: new Date().toISOString(), receiptUrl: null } });
+      store('zk_demo_orders', orders); return { ok: true, order_no: orderNo };
+    },
     async placeOrder(a) {
       let sub = 0; const items = [];
       for (const it of a.p_items) {
@@ -1015,6 +1040,8 @@ function viewCart() {
     depositor: d.manager_name || d.company, memo: '', tax: false, tax_biz_no: d.biz_no || '', tax_email: d.email, save_addr: false,
   };
   const store = D.dest === 'store';
+  if (D.tax || !CARD_ON()) D.pay = 'bank';
+  const card = D.pay === 'card';
 
   app().innerHTML = `
   <div class="page-head"><div><div class="eyebrow">Cart · Checkout</div><h1>장바구니 · 주문서</h1></div></div>
@@ -1048,14 +1075,19 @@ function viewCart() {
         </div>
         ${addrField('배송지', D.c_addr1, true)}`}
 
-        <h2 class="sec2">입금 정보</h2>
+        <h2 class="sec2">결제 방법</h2>
+        ${CARD_ON() ? `<div class="seg paysel">
+          <label class="${card ? '' : 'on'}"><input type="radio" name="pay" value="bank" ${card ? '' : 'checked'}> <span><b>무통장 입금</b><small>세금계산서 발행 가능</small></span></label>
+          <label class="${card ? 'on' : ''} ${D.tax ? 'dis' : ''}"><input type="radio" name="pay" value="card" ${card ? 'checked' : ''} ${D.tax ? 'disabled' : ''}> <span><b>카드 · 간편결제</b><small>${D.tax ? '세금계산서 요청 시 선택 불가' : '결제 즉시 입금확인'}</small></span></label>
+        </div>` : ''}
+        ${card ? '<p class="small mut" style="margin:-4px 0 14px">카드 결제는 카드 전표가 증빙이라 세금계산서를 따로 발행하지 않아요.</p>' : `
         <div class="field"><label>입금자명<em>*</em></label><input name="depositor" value="${esc(D.depositor)}"><span class="hint">입금 확인에 사용됩니다. 실제 입금하실 이름과 같게 적어 주세요.${cutoffText(S.settings.same_day_cutoff) ? `<br>${cutoffText(S.settings.same_day_cutoff)}까지 입금 확인되면 당일 출고돼요.` : ''}</span></div>
         <label class="check"><input type="checkbox" name="tax" ${D.tax ? 'checked' : ''}> <span><b>세금계산서 발행 요청</b></span></label>
         ${D.tax ? `
         <div class="grid2 taxbox">
           <div class="field"><label>사업자등록번호<em>*</em></label><input name="tax_biz_no" value="${esc(D.tax_biz_no)}" inputmode="numeric" placeholder="000-00-00000"></div>
           <div class="field"><label>계산서 받을 이메일<em>*</em></label><input name="tax_email" value="${esc(D.tax_email)}" type="email"></div>
-        </div>` : ''}
+        </div>` : ''}`}
         <div class="field" style="margin-top:6px"><label>요청사항</label><textarea name="memo" rows="2" placeholder="예) 출고 전 연락 부탁드립니다">${esc(D.memo)}</textarea></div>
       </form>
     </div>
@@ -1066,10 +1098,11 @@ function viewCart() {
       <div class="row"><span>배송비</span><b>${ship ? won(ship) + '원' : '무료'}</b></div>
       ${need > 0 ? `<div class="free">${won(need)}원 더 담으면 무료배송</div>` : ''}
       ${couponBox(sub, ship)}
-      <div class="row tot"><span>총 입금액</span><b>${won(sub + ship - cdisc)}원</b></div>
-      <p class="small mut" style="margin:14px 0">결제 방법 · <b style="color:var(--ink)">무통장 입금</b><br>주문 후 ${st.pay_deadline_days || 3}일 이내 입금해 주세요. 기한이 지나면 자동 취소됩니다.</p>
+      <div class="row tot"><span>${card ? '총 결제금액' : '총 입금액'}</span><b>${won(sub + ship - cdisc)}원</b></div>
+      ${card ? '<p class="small mut" style="margin:14px 0">결제 방법 · <b style="color:var(--ink)">카드 · 간편결제</b><br>다음 화면에서 결제창이 열려요. 결제가 끝나면 바로 입금확인 처리됩니다.</p>'
+        : `<p class="small mut" style="margin:14px 0">결제 방법 · <b style="color:var(--ink)">무통장 입금</b><br>주문 후 ${st.pay_deadline_days || 3}일 이내 입금해 주세요. 기한이 지나면 자동 취소됩니다.</p>`}
       ${closed ? `<div class="closed-note"><b>지금은 주문을 받지 않아요</b><div>${esc(st.orders_closed_msg || '입고 준비 중입니다. 주문이 열리면 공지로 알려드릴게요.')}</div></div>` : ''}
-      <button class="btn pri block" id="order" ${blocked || closed ? 'disabled' : ''}>${closed ? '주문 준비 중' : `${won(sub + ship - cdisc)}원 주문하기`}</button>
+      <button class="btn pri block" id="order" ${blocked || closed ? 'disabled' : ''}>${closed ? '주문 준비 중' : `${won(sub + ship - cdisc)}원 ${card ? '카드 결제하기' : '주문하기'}`}</button>
       <div class="err" id="ordererr">${blocked ? '재고·수량을 확인해 주세요.' : ''}</div>
       <button class="btn ghost block" id="quote" style="margin-top:10px">견적서 받기 (인쇄 · PDF)</button>
       ${tierText(st) ? `<p class="small mut" style="margin-top:12px">수량 할인: ${tierText(st)} (같은 상품 옵션 합산)</p>` : ''}
@@ -1087,13 +1120,15 @@ function viewCart() {
   if (!store && D.c_addr2) f.addr2.value = D.c_addr2;
   if (store && D.addr2) f.addr2.value = D.addr2;
   f.orderer_name.addEventListener('input', () => {
-    if (f.depositor.value === D.orderer_name) f.depositor.value = f.orderer_name.value;
+    if (f.depositor && f.depositor.value === D.orderer_name) f.depositor.value = f.orderer_name.value;
   });
+  $$('input[name=pay]', f).forEach(r => r.onchange = () => { keep(); D.pay = r.value; viewCart(); });
   const keep = () => {
     D.orderer_name = f.orderer_name.value; D.orderer_phone = f.orderer_phone.value;
     if (store) { D.ship_name = f.ship_name.value; D.ship_phone = f.ship_phone.value; D.addr1 = f.addr1.value; D.addr2 = f.addr2.value; D.save_addr = f.save_addr.checked; }
     else { D.c_name = f.ship_name.value; D.c_phone = f.ship_phone.value; D.c_addr1 = f.addr1.value; D.c_addr2 = f.addr2.value; }
-    D.depositor = f.depositor.value; D.memo = f.memo.value; D.tax = f.tax.checked;
+    if (f.depositor) D.depositor = f.depositor.value;
+    D.memo = f.memo.value; if (f.tax) D.tax = f.tax.checked;
     if (f.tax_biz_no) { D.tax_biz_no = f.tax_biz_no.value; D.tax_email = f.tax_email.value; }
   };
   f.addEventListener('input', keep);
@@ -1102,7 +1137,7 @@ function viewCart() {
   if (f.tax_biz_no) f.tax_biz_no.addEventListener('input', () => { f.tax_biz_no.value = fmtBiz(f.tax_biz_no.value); keep(); });
   bindAddr(f);
   $$('input[name=dest]', f).forEach(r => r.onchange = () => { keep(); D.dest = r.value; viewCart(); });
-  f.tax.onchange = () => { keep(); viewCart(); };
+  if (f.tax) f.tax.onchange = () => { keep(); viewCart(); };
 
   const setQty = (i, q) => { keep(); const c = getCart(); c[i].qty = Math.max(1, q); setCart(c); viewCart(); };
   $$('[data-q]').forEach(b => b.onclick = () => setQty(+b.dataset.q, getCart()[+b.dataset.q].qty + +b.dataset.d));
@@ -1113,9 +1148,9 @@ function viewCart() {
     keep();
     const err = $('#ordererr'), btn = $('#order');
     const addr = addrValue(f), t = x => (x || '').trim();
-    const need = [t(D.orderer_name), t(D.orderer_phone), t(f.ship_name.value), t(f.ship_phone.value), addr, t(D.depositor)];
+    const need = [t(D.orderer_name), t(D.orderer_phone), t(f.ship_name.value), t(f.ship_phone.value), addr, card ? 'card' : t(D.depositor)];
     if (need.some(x => !x)) { err.textContent = '필수 항목(*)을 모두 입력해 주세요.'; return; }
-    if (D.tax && (!t(D.tax_biz_no) || !t(D.tax_email))) { err.textContent = '세금계산서용 사업자등록번호와 이메일을 입력해 주세요.'; return; }
+    if (!card && D.tax && (!t(D.tax_biz_no) || !t(D.tax_email))) { err.textContent = '세금계산서용 사업자등록번호와 이메일을 입력해 주세요.'; return; }
     const dest = store ? '기본 배송지' : '다른 주소';
     if (S.coupon && !cp && S.coupon.kind === 'free_ship' && !ship) { err.textContent = `이미 무료배송이라 쿠폰 '${S.coupon.name}'은 쓸 수 없어요. 쿠폰을 빼 주세요.`; return; }
     if (S.coupon && !cp) { err.textContent = `쿠폰 '${S.coupon.name}'은 ${won(S.coupon.min_order)}원 이상 주문 시 쓸 수 있어요. 쿠폰을 빼거나 상품을 더 담아 주세요.`; return; }
@@ -1125,18 +1160,19 @@ function viewCart() {
     try { S.settings = (await api.catalog()).settings || S.settings; } catch (e) { /* 그대로 진행 */ }
     btn.disabled = false;
     if (cartTotal() !== sub + ship - cdisc) { viewCart(); toast('가격·배송비가 변경되어 다시 계산했어요. 금액을 확인하고 다시 주문해 주세요.', 4000); return; }
-    if (!await ask(`총 ${won(sub + ship - cdisc)}원을 주문하시겠습니까?\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: '주문하기' })) return;
+    if (!await ask(card ? `총 ${won(sub + ship - cdisc)}원을 카드로 결제할까요?\n배송: ${dest} (${t(f.ship_name.value)})\n결제창에서 30분 안에 결제하지 않으면 주문이 자동 취소돼요.` : `총 ${won(sub + ship - cdisc)}원을 주문하시겠습니까?\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: card ? '결제하기' : '주문하기' })) return;
     btn.disabled = true; btn.textContent = '주문 처리 중…'; err.textContent = '';
     try {
-      const r = await api.placeOrder({
+      const common = {
         p_items: getCart().map(c => ({ variant_id: c.variant_id, qty: c.qty })),
-        p_depositor: t(D.depositor), p_ship_name: t(f.ship_name.value), p_ship_phone: t(f.ship_phone.value),
+        p_ship_name: t(f.ship_name.value), p_ship_phone: t(f.ship_phone.value),
         p_ship_address: addr, p_memo: [store ? '' : '[다른 주소 배송]', t(D.memo)].filter(Boolean).join(' ') || null,
         p_orderer_name: t(D.orderer_name), p_orderer_phone: t(D.orderer_phone),
-        p_tax_invoice: !!D.tax, p_tax_biz_no: D.tax ? t(D.tax_biz_no) : null, p_tax_email: D.tax ? t(D.tax_email) : null,
         ...(cp ? (cp.code ? { p_coupon_code: cp.code } : { p_coupon_id: cp.id }) : {}),
         ...(DEMO && cp ? { _coupon: cp } : {}),
-      });
+      };
+      const r = card ? await api.placeOrderCard(common) : await api.placeOrder({ ...common, p_depositor: t(D.depositor),
+        p_tax_invoice: !!D.tax, p_tax_biz_no: D.tax ? t(D.tax_biz_no) : null, p_tax_email: D.tax ? t(D.tax_email) : null });
       // 기본 배송지 저장 / 비어 있던 사업자번호 채우기
       const patch = {};
       if (store && D.save_addr && addr !== S.dealer.address) patch.address = addr;
@@ -1145,6 +1181,12 @@ function viewCart() {
       setCart([]);
       S.orders = null; S.draft = null; S.coupon = null; S.myCoupons = undefined;
       await refreshStock();
+      if (card) {   // 주문 생성 → 결제창 (실패·닫기 시 주문내역에서 다시 결제 가능)
+        btn.textContent = '결제창 여는 중…';
+        const o = (await loadOrders(true)).find(x => x.order_no === r.order_no) || { ...r, order_items: [] };
+        try { await payWithCard(o); } catch (e2) { location.hash = '#/orders'; setTimeout(() => toast(errMsg(e2) + ' · 주문내역에서 다시 결제할 수 있어요', 5000), 300); }
+        return;
+      }
       location.hash = '#/done/' + r.order_no;
     } catch (e) {
       err.textContent = errMsg(e);
@@ -1231,6 +1273,63 @@ async function refreshStock() {
   } catch (e) { /* 다음 로딩 때 갱신 */ }
 }
 
+// ---------------------------------------------------------------- 카드 결제 (토스페이먼츠)
+const CARD_ON = () => !!(window.TOSS_CLIENT_KEY || DEMO);
+function loadToss() {
+  if (window.TossPayments) return Promise.resolve();
+  return new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://js.tosspayments.com/v2/standard'; sc.onload = ok; sc.onerror = () => bad(new Error('결제창을 불러오지 못했습니다')); document.head.appendChild(sc); });
+}
+// 결제창 → 끝나면 토스가 ?pay=success&o=주문번호&paymentKey=…&orderId=…&amount=… 로 돌려보냄 (boot 에서 승인)
+async function payWithCard(o) {
+  const base = location.origin + location.pathname;
+  const tossOrderId = `${o.order_no}-${Math.random().toString(36).slice(2, 6)}`;   // 다시 결제할 때도 겹치지 않게
+  if (DEMO) { location.href = `${base}${location.search ? location.search + '&' : '?'}pay=success&o=${o.order_no}&paymentKey=demo_${Date.now()}&orderId=${tossOrderId}&amount=${o.total}`; return; }
+  await loadToss();
+  const tp = TossPayments(window.TOSS_CLIENT_KEY);
+  const payment = tp.payment({ customerKey: TossPayments.ANONYMOUS });
+  const name = (o.order_items || o.items || [])[0]?.product_name || '브링고 주문';
+  const cnt = (o.order_items || o.items || []).length;
+  await payment.requestPayment({
+    method: 'CARD',
+    amount: { currency: 'KRW', value: o.total },
+    orderId: tossOrderId,
+    orderName: cnt > 1 ? `${name} 외 ${cnt - 1}건` : name,
+    customerEmail: S.dealer.email, customerName: o.orderer_name || S.dealer.manager_name,
+    successUrl: `${base}?pay=success&o=${encodeURIComponent(o.order_no)}`,
+    failUrl: `${base}?pay=fail&o=${encodeURIComponent(o.order_no)}`,
+  });
+}
+// 결제창에서 돌아왔을 때 처리 (boot 에서 호출) → 처리했으면 true
+async function handlePayReturn() {
+  const q = new URLSearchParams(location.search), pay = q.get('pay'), no = q.get('o');
+  if (!pay || !no) return false;
+  const keep = DEMO ? `?demo=${q.get('demo')}` : '';
+  const go = h => { history.replaceState(null, '', location.pathname + keep + h); };
+  if (pay === 'success') {
+    app().innerHTML = '<div class="loading">결제를 확인하는 중…</div>';
+    try {
+      await api.confirmCard({ paymentKey: q.get('paymentKey'), orderId: q.get('orderId'), amount: +q.get('amount'), orderNo: no });
+      S.orders = null;   // 장바구니는 주문을 만들 때 이미 비움 (다시 결제할 때 새 장바구니를 지우지 않도록)
+      go('#/done/' + no);
+    } catch (e) { S.orders = null; go('#/orders'); setTimeout(() => toast(errMsg(e), 6000), 300); }
+  } else {
+    const msg = q.get('message') || '결제가 취소되었습니다';
+    S.orders = null; go('#/orders');
+    setTimeout(() => toast(`${msg} · 주문내역에서 다시 결제하거나 취소할 수 있어요`, 6000), 300);
+  }
+  return true;
+}
+const cardPending = o => o.pay_method === 'card' && o.status === 'pending_payment';
+function cardBox(o) {
+  return `<div class="bank cardbox"><dl>
+    <dt>결제 금액</dt><dd class="amt">${won(o.total)}원</dd>
+    <dt>결제 기한</dt><dd>${fmtDT(o.pay_deadline)}까지 <span class="mut small">· 지나면 자동 취소돼요</span></dd>
+  </dl><button class="btn pri block" data-paycard="${o.id}" style="margin-top:14px">${won(o.total)}원 카드 결제하기</button></div>`;
+}
+const payLine = o => o.pay_method === 'card'
+  ? (o.payment_key ? `카드 결제${o.pay_info?.approvedAt ? ` · ${fmtDT(o.pay_info.approvedAt).slice(5)}` : ''}${o.pay_info?.receiptUrl ? ` <a class="track-btn" href="${esc(o.pay_info.receiptUrl)}" target="_blank" rel="noopener">영수증 ↗</a>` : ''}${o.pay_info?.cancelledAt ? ' · <b style="color:var(--bad)">결제 취소(환불)</b>' : ''}` : '카드 결제 대기')
+  : '무통장 입금';
+
 // ---------------------------------------------------------------- 주문 완료
 function bankBox(o) {
   const st = S.settings;
@@ -1267,16 +1366,28 @@ async function viewDone(no) {
   app().innerHTML = `
   <div class="done">
     <div class="eyebrow">Order Complete</div>
-    <h1>주문이 접수되었습니다</h1>
-    <p class="mut">주문번호 <b class="num" style="color:var(--ink)">${esc(o.order_no)}</b> · 아래 계좌로 입금해 주시면 확인 후 출고합니다.</p>
-    ${bankBox(o)}
+    <h1>${o.pay_method === 'card' && o.payment_key ? '결제가 완료되었습니다' : '주문이 접수되었습니다'}</h1>
+    ${o.pay_method === 'card' && o.payment_key
+      ? `<p class="mut">주문번호 <b class="num" style="color:var(--ink)">${esc(o.order_no)}</b> · 결제가 확인되어 출고 준비를 시작합니다.</p>
+         <div class="bank"><dl><dt>결제 금액</dt><dd class="amt">${won(o.total)}원</dd><dt>결제 수단</dt><dd>${payLine(o)}</dd></dl></div>`
+      : cardPending(o) ? `<p class="mut">주문번호 <b class="num" style="color:var(--ink)">${esc(o.order_no)}</b> · 아직 결제가 끝나지 않았어요.</p>${cardBox(o)}`
+      : `<p class="mut">주문번호 <b class="num" style="color:var(--ink)">${esc(o.order_no)}</b> · 아래 계좌로 입금해 주시면 확인 후 출고합니다.</p>${bankBox(o)}`}
     <h2 style="margin-top:26px">주문 상품</h2>
     ${itemsTable(o)}
     <p class="small mut" style="margin-top:14px">받는 분 ${esc(o.ship_name)} · ${esc(o.ship_phone)} · ${esc(o.ship_address)}</p>
-    <p class="small mut">${esc(S.settings.notice || '')}</p>
+    ${o.pay_method === 'card' ? '' : `<p class="small mut">${esc(S.settings.notice || '')}</p>`}
     <div class="done-acts"><a class="btn pri" href="#/orders">주문내역 보기</a><button class="btn" id="stmt">주문서 출력</button><a class="btn ghost" href="#/products">계속 둘러보기</a></div>
   </div>`;
   $('#stmt').onclick = () => printStatement(o, '주 문 서');
+  bindPayCard();
+}
+function bindPayCard() {
+  $$('[data-paycard]').forEach(b => b.onclick = async () => {
+    const o = (S.orders || []).find(x => x.id === +b.dataset.paycard);
+    b.disabled = true;
+    try { await payWithCard(o); } catch (e) { toast(errMsg(e)); }
+    b.disabled = false;
+  });
 }
 
 // ---------------------------------------------------------------- 주문 내역
@@ -1302,12 +1413,13 @@ async function viewOrders() {
           <div><div class="no">${esc(o.order_no)}</div><div class="dt">${fmtDT(o.created_at)}</div></div>
           <div class="small">${title}</div>
           <div class="amt">${won(o.total)}원</div>
-          <div>${statusBadge(o.status)}</div>
+          <div>${cardPending(o) ? '<span class="badge st-pending_payment">결제대기</span>' : statusBadge(o.status)}</div>
         </summary>
         <div class="body">
           ${o.status !== 'cancelled' ? `<div class="steps">${FLOW.map((s, k) => `<i class="${k <= step ? 'on' : ''}">${STATUS[s]}</i>`).join('')}</div>` : `<p class="small mut">취소됨 · ${fmtDT(o.cancelled_at)}${o.cancel_reason ? ' · ' + esc(o.cancel_reason) : ''}</p>`}
           ${itemsTable(o)}
           <div class="meta">
+            <div><span>결제</span>${payLine(o)}</div>
             ${o.orderer_name ? `<div><span>주문자</span>${esc(o.orderer_name)} · ${esc(o.orderer_phone || '')}</div>` : ''}
             <div><span>받는 분</span>${esc(o.ship_name)} · ${esc(o.ship_phone)}</div>
             ${o.tax_invoice ? `<div><span>세금계산서</span>${o.tax_issued ? '발행 완료' : '발행 요청'} · ${esc(o.tax_biz_no || '')}</div>` : ''}
@@ -1317,9 +1429,9 @@ async function viewOrders() {
             ${o.status === 'shipped' ? `<div><span>수령 확인</span>배송 시작 ${S.settings.auto_deliver_days || 3}일 후 자동 완료</div>` : ''}
             ${o.status === 'delivered' && o.delivered_at ? `<div><span>배송완료</span>${fmtDT(o.delivered_at)}${o.delivered_by === 'dealer' ? ' · 수령 확인' : o.delivered_by === 'auto' ? ' · 자동 처리' : ''}</div>` : ''}
           </div>
-          ${o.status === 'pending_payment' ? bankBox(o) : ''}
+          ${cardPending(o) ? cardBox(o) : o.status === 'pending_payment' ? bankBox(o) : ''}
           <div class="acts">
-            ${o.status === 'pending_payment' ? (o.paid_notified_at
+            ${o.status === 'pending_payment' && !cardPending(o) ? (o.paid_notified_at
               ? `<span class="badge st-paid">입금 알림 보냄 · ${fmtDT(o.paid_notified_at).slice(5)}</span>`
               : `<button class="btn pri sm" data-paid="${o.id}">입금했어요</button>`) : ''}
             ${o.status === 'shipped' ? `<button class="btn pri sm" data-recv="${o.id}">받았어요</button>` : ''}
@@ -1339,6 +1451,7 @@ async function viewOrders() {
     try { await api.cancel(+b.dataset.cancel); toast('주문을 취소했습니다'); await refreshStock(); viewOrders(); }
     catch (e) { toast(errMsg(e)); b.disabled = false; }
   });
+  bindPayCard();
   $$('[data-paid]').forEach(b => b.onclick = async () => {
     if (!await ask('입금하셨나요?\n관리자에게 입금 확인 요청 알림을 보냅니다.', { ok: '알림 보내기' })) return;
     b.disabled = true;
@@ -1477,6 +1590,7 @@ async function boot() {
     if (S.dealer.status === 'rejected') return viewNotice('가입이 승인되지 않았습니다', '자세한 내용은 관리자에게 문의해 주세요.');
     Object.assign(S, await api.catalog());
     await syncCart();
+    await handlePayReturn();
     const [ns, rs] = await Promise.allSettled([api.notices(), api.myRestock(), loadOrders(), loadInquiries()]);
     S.restock = new Set(rs.status === 'fulfilled' ? rs.value : []);
     S.notices = ns.status === 'fulfilled' ? ns.value : [];

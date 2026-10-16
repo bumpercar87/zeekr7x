@@ -30,6 +30,11 @@ const api = DEMO ? demoAdminApi() : {
   },
   async delNotice(id) { const { error } = await sb.from('notices').delete().eq('id', id); if (error) throw error; },
   async updInquiry(id, patch) { const { error } = await sb.from('inquiries').update(patch).eq('id', id); if (error) throw error; },
+  // 카드 결제 취소(환불) — Edge Function 'toss-cancel'
+  async cancelCard(id, reason) {
+    const { error } = await sb.functions.invoke('toss-cancel', { body: { orderId: id, reason } });
+    if (error) { let m = error.message; try { m = (await error.context.json()).message || m; } catch (e) {} throw new Error(m); }
+  },
   async updOrder(id, patch) { const { error } = await sb.from('orders').update(patch).eq('id', id); if (error) throw error; },
   async updVariant(id, patch) { const { error } = await sb.from('variants').update(patch).eq('id', id); if (error) throw error; },
   async updProduct(id, patch) { const { error } = await sb.from('products').update(patch).eq('id', id); if (error) throw error; },
@@ -81,6 +86,7 @@ function demoAdminApi() {
       }
       return data;
     },
+    async cancelCard(id, reason) { const o = data.orders.find(x => x.id === id); Object.assign(o, { status: 'cancelled', cancel_reason: reason, cancelled_at: new Date().toISOString(), pay_info: { ...(o.pay_info || {}), cancelledAt: new Date().toISOString() } }); },
     async updOrder(id, patch) { const o = data.orders.find(x => x.id === id); if (patch.status && patch.status !== o.status) { const t = new Date().toISOString(); ({ paid: () => o.paid_at = t, shipped: () => o.shipped_at = t, delivered: () => o.delivered_at = t, cancelled: () => o.cancelled_at = t })[patch.status]?.(); } Object.assign(o, patch); },
     async updVariant(id, patch) { Object.assign(data.variants.find(x => x.id === id), patch); },
     async updProduct(id, patch) { Object.assign(data.products.find(x => x.id === id), patch); },
@@ -195,7 +201,7 @@ function viewOrders() {
         <td><b>${esc(o.orderer_name || o.dealers?.manager_name || '')}</b><div class="d">${dealerName(o.dealers)}</div></td>
         <td>${items[0] ? esc(items[0].product_name) + (items.length > 1 ? ` <span class="mut">외 ${items.length - 1}건</span>` : '') : ''} <span class="mut">· ${qty}개</span></td>
         <td class="n">${won(o.total)}</td>
-        <td>${esc(o.depositor_name)}</td>
+        <td>${o.pay_method === 'card' ? `<span class="paytag ${o.payment_key ? 'ok' : ''}">카드${o.payment_key ? '' : ' 대기'}</span>` : esc(o.depositor_name)}</td>
         <td>${statusBadge(o.status)}${o.paid_notified_at && o.status === 'pending_payment' ? `<div class="d" style="color:var(--ok);font-weight:700">● 입금 알림</div>` : ''}${o.tax_invoice ? `<div class="d" style="color:${o.tax_issued ? 'var(--ok)' : 'var(--acc)'}">계산서 ${o.tax_issued ? '발행됨' : '요청'}</div>` : ''}</td>
         <td class="d">${o.status === 'pending_payment' ? `<span class="${over ? 'over' : ''}">${fmtDT(o.pay_deadline)}${over ? ' 초과' : ''}</span>` : o.tracking_no ? `${esc(o.carrier || '')} ${esc(o.tracking_no)}` : ''}</td>
       </tr>
@@ -216,7 +222,9 @@ function viewOrders() {
 
 function orderDetail(o) {
   const items = o.order_items || [], d = o.dealers || {};
-  const next = { pending_payment: ['paid', '입금 확인'], paid: ['preparing', '출고 준비'], preparing: ['shipped', '배송 시작 (송장 필요)'], shipped: ['delivered', '배송 완료'] }[o.status];
+  const isCard = o.pay_method === 'card', cardPaid = isCard && !!o.payment_key;
+  const next = (isCard && o.status === 'pending_payment') ? null   // 카드 주문은 결제되면 자동으로 입금확인
+    : { pending_payment: ['paid', '입금 확인'], paid: ['preparing', '출고 준비'], preparing: ['shipped', '배송 시작 (송장 필요)'], shipped: ['delivered', '배송 완료'] }[o.status];
   return `
   <tr class="detail"><td colspan="7"><div class="in" data-oid="${o.id}">
     <div>
@@ -227,14 +235,17 @@ function orderDetail(o) {
       ${o.status !== 'cancelled' ? `
       <div class="stat-btns">
         ${next ? `<button class="btn sm pri" data-next="${next[0]}">${next[1]} →</button>` : ''}
-        ${o.status !== 'delivered' ? `<button class="btn sm ghost" data-cancel>${o.status === 'shipped' ? '주문 취소' : '주문 취소 (재고 복원)'}</button>` : ''}
-        <select data-set title="상태 직접 변경" class="btn sm ghost" style="padding:6px 8px">
-          <option value="">상태 직접 변경…</option>${FLOW.filter(s => s !== o.status).map(s => `<option value="${s}">${STATUS[s]}</option>`).join('')}
-        </select>
+        ${isCard && o.status === 'pending_payment' ? '<span class="small mut">카드 결제 대기 중 · 결제되면 자동 입금확인, 30분 지나면 자동 취소</span>' : ''}
+        ${cardPaid ? `<button class="btn sm ghost danger" data-cardcancel>결제 취소 (카드 환불)</button>`
+          : o.status !== 'delivered' ? `<button class="btn sm ghost" data-cancel>${o.status === 'shipped' ? '주문 취소' : '주문 취소 (재고 복원)'}</button>` : ''}
+        ${isCard && o.status === 'pending_payment' ? '' : `<select data-set title="상태 직접 변경" class="btn sm ghost" style="padding:6px 8px">
+          <option value="">상태 직접 변경…</option>${FLOW.filter(s => s !== o.status && !(isCard && s === 'pending_payment')).map(s => `<option value="${s}">${STATUS[s]}</option>`).join('')}
+        </select>`}
       </div>` : `<p class="small mut" style="margin-top:12px">취소 · ${fmtDT(o.cancelled_at)} · ${esc(o.cancel_reason || '')}</p>`}
     </div>
     <div>
       <dl>
+        <dt>결제</dt><dd>${isCard ? `<b>카드</b>${cardPaid ? ` · 승인 ${fmtDT(o.pay_info?.approvedAt)}${o.pay_info?.method ? ` · ${esc(o.pay_info.method)}` : ''}${o.pay_info?.installment ? ` · ${o.pay_info.installment}개월` : ''}${o.pay_info?.receiptUrl ? ` · <a href="${esc(o.pay_info.receiptUrl)}" target="_blank" rel="noopener" style="text-decoration:underline">영수증 ↗</a>` : ''}${o.pay_info?.cancelledAt ? ` · <b style="color:var(--bad)">환불 ${fmtDT(o.pay_info.cancelledAt)}</b>` : ''}` : ' · 결제 대기'}` : `무통장 입금 · 입금자 ${esc(o.depositor_name || '-')}`}</dd>
         <dt>딜러</dt><dd>${esc(d.company || '')} ${esc(d.branch || '')} · ${esc(d.manager_name || '')} ${esc(d.phone || '')}</dd>
         ${o.orderer_name ? `<dt>주문자</dt><dd>${esc(o.orderer_name)} · ${esc(o.orderer_phone || '')}</dd>` : ''}
         <dt>받는 분</dt><dd>${esc(o.ship_name)} · ${esc(o.ship_phone)}${/다른 주소 배송|고객 직접 배송/.test(o.memo || '') ? ' <span class="badge st-preparing">다른 주소</span>' : ''}</dd>
@@ -259,6 +270,7 @@ function orderDetail(o) {
 function bindDetail() {
   $$('.detail .in').forEach(box => {
     const id = +box.dataset.oid, o = A.orders.find(x => x.id === id);
+    const cardPaid = o.pay_method === 'card' && !!o.payment_key;
     const ship = () => ({ carrier: $('[data-carrier]', box).value || null, tracking_no: $('[data-tracking]', box).value.trim() || null });
     const set = async (patch, msg) => {
       try { await api.updOrder(id, patch); await reload(); viewOrders(); toast(msg); }
@@ -282,8 +294,16 @@ function bindDetail() {
       if (why === null) return;  // 사유 입력이 필요해 prompt 유지
       set({ status: 'cancelled', cancel_reason: why || '관리자 취소' }, `${o.order_no} 취소${o.status === 'shipped' ? '' : ' · 재고 복원'}`);
     };
+    const ccard = $('[data-cardcancel]', box);
+    if (ccard) ccard.onclick = async () => {
+      const why = prompt(`카드 결제 ${won(o.total)}원을 전액 환불하고 주문을 취소합니다.${o.status === 'shipped' ? '\n이미 출고된 주문이라 재고는 되돌리지 않습니다.' : ''}\n취소 사유 (딜러에게 표시됩니다)`, '관리자 취소');
+      if (why === null) return;
+      ccard.disabled = true; ccard.textContent = '환불 처리 중…';
+      try { await api.cancelCard(id, why || '관리자 취소'); await reload(); viewOrders(); toast(`${o.order_no} 카드 결제를 취소(환불)했습니다`); }
+      catch (e) { toast(errMsg(e), 5000); ccard.disabled = false; ccard.textContent = '결제 취소 (카드 환불)'; }
+    };
     const sel = $('[data-set]', box);
-    if (sel) sel.onchange = async () => { if (sel.value && await ask(`상태를 '${STATUS[sel.value]}'(으)로 바꿀까요?`)) set({ status: sel.value }, '상태를 변경했습니다'); else sel.value = ''; };
+    if (sel) sel.onchange = async () => { if (sel.value === 'cancelled' && cardPaid) { sel.value = ''; return toast('카드 결제 주문은 [결제 취소 (카드 환불)] 버튼으로 취소해 주세요', 4000); } if (sel.value && await ask(`상태를 '${STATUS[sel.value]}'(으)로 바꿀까요?`)) set({ status: sel.value }, '상태를 변경했습니다'); else sel.value = ''; };
     $('[data-saveship]', box).onclick = () => set(ship(), '송장 정보를 저장했습니다');
     const tx = $('[data-taxdone]', box);
     if (tx) tx.onchange = () => set({ tax_issued: tx.checked }, tx.checked ? '세금계산서 발행 완료로 표시했습니다' : '발행 완료 표시를 해제했습니다');
@@ -292,13 +312,13 @@ function bindDetail() {
 }
 
 function downloadCSV(list) {
-  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일', '쿠폰', '쿠폰할인'];
+  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일', '쿠폰', '쿠폰할인', '결제수단'];
   const rows = [];
   for (const o of list) for (const [k, i] of (o.order_items || []).entries()) {
     const d = o.dealers || {};
     rows.push([fmtDT(o.created_at), o.order_no, STATUS[o.status], d.company, d.branch, d.manager_name, d.phone, i.product_name, i.option_name, i.sku, i.unit_price, i.qty, i.line_total,
       k === 0 ? o.shipping_fee : '', k === 0 ? o.total : '', o.depositor_name, o.ship_name, o.ship_phone, o.ship_address, o.memo, o.carrier, o.tracking_no, fmtDT(o.paid_at), fmtDT(o.shipped_at), fmtDT(o.delivered_at), o.admin_memo,
-      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email, k === 0 ? o.coupon_name : '', k === 0 ? o.coupon_discount || '' : '']);
+      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email, k === 0 ? o.coupon_name : '', k === 0 ? o.coupon_discount || '' : '', o.pay_method === 'card' ? (o.pay_info?.cancelledAt ? '카드(환불)' : o.payment_key ? '카드' : '카드(미결제)') : '무통장']);
   }
   const csv = [head, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
