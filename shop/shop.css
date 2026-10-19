@@ -786,3 +786,10 @@ ul.inq-guide b{color:var(--ink)}
 .inq-notice .go{flex:none;font-size:13px;color:var(--mut)}
 .inq-notice:hover{border-color:var(--ink)}
 @media (max-width:860px){ .inq-notice .go{font-size:12.5px} }
+
+/* 공지 팝업 버튼: 작게, 손가락으로 누르기 좋은 높이(40px) 유지 */
+.np-btns{align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:10px}
+.np-today{border:0;background:none;padding:10px 0;font:inherit;font-size:13px;color:var(--mut);text-decoration:underline;cursor:pointer;white-space:nowrap}
+.np-r{display:flex;gap:6px}
+.np-btns .np-r .btn{flex:none;min-height:40px;padding:0 14px;font-size:13.5px;display:inline-flex;align-items:center}
+@media (max-width:860px){ .np-btns .np-r .btn{flex:none} .np-btns .btn{flex:none} }

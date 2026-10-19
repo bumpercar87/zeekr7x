@@ -726,7 +726,7 @@ function noticePopup() {
   ov.innerHTML = `<div class="ask np" role="dialog" aria-modal="true">
     <div class="np-k">공지</div>
     ${list.slice(0, 3).map(n => `<div class="np-item"><h3>${esc(n.title)}</h3><div class="np-body">${esc(n.body || '')}</div></div>`).join('')}
-    <div class="np-btns"><button class="btn ghost" data-np="today">오늘 하루 보지 않기</button><a class="btn ghost" href="#/notices" data-np="all">공지 전체 보기</a><button class="btn pri" data-np="close">닫기</button></div>
+    <div class="np-btns"><button class="np-today" data-np="today">오늘 하루 보지 않기</button><span class="np-r"><a class="btn sm ghost" href="#/notices" data-np="all">공지 전체 보기</a><button class="btn sm pri" data-np="close">닫기</button></span></div>
   </div>`;
   document.body.appendChild(ov);
   const close = () => ov.remove();
