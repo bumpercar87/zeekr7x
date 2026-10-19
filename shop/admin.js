@@ -545,7 +545,6 @@ function viewSettings() {
       </div>
       <div class="field"><label>계좌번호</label><input name="bank_account" value="${esc(s.bank_account)}"></div>
       <h2 style="margin-top:18px">주문 · 배송</h2>
-      <div class="field"><label class="check"><input type="checkbox" name="show_tags" ${s.show_tags ? 'checked' : ''}> <span><b>NEW · BEST 표시</b> — 켜면 딜러 화면에 NEW·BEST 태그와 홈의 신규 입고·베스트 섹션이 나타나요 (가오픈 동안은 꺼 두기)</span></label></div>
       <div class="field open-sw">
         <label class="check"><input type="checkbox" name="orders_open" ${s.orders_open === false ? '' : 'checked'}> <span><b>주문 받기</b> — 끄면 딜러는 장바구니·견적서까지만 쓰고 주문은 할 수 없어요 (관리자 계정은 테스트 주문 가능)</span></label>
         <textarea name="orders_closed_msg" rows="2" placeholder="주문을 닫았을 때 장바구니에 보이는 안내" style="margin-top:8px">${esc(s.orders_closed_msg)}</textarea>
@@ -587,7 +586,7 @@ function viewSettings() {
     const qty_discounts = [0, 1, 2].map(i => ({ min: n('tmin' + i), rate: n('trate' + i) })).filter(x => x.min && x.rate).sort((a, b) => a.min - b.min);
     if (qty_discounts.some(x => x.rate >= 100)) return toast('할인율은 100% 미만이어야 합니다');
     const patch = { bank_name: t('bank_name'), bank_holder: t('bank_holder'), bank_account: t('bank_account'),
-      pay_deadline_days: n('pay_deadline_days') || 3, auto_deliver_days: n('auto_deliver_days') || 3, same_day_cutoff: t('same_day_cutoff'), orders_open: f.orders_open.checked, show_tags: f.show_tags.checked, orders_closed_msg: t('orders_closed_msg'), shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
+      pay_deadline_days: n('pay_deadline_days') || 3, auto_deliver_days: n('auto_deliver_days') || 3, same_day_cutoff: t('same_day_cutoff'), orders_open: f.orders_open.checked, orders_closed_msg: t('orders_closed_msg'), shipping_fee: n('shipping_fee') || 0, free_shipping_over: n('free_shipping_over'),
       notice: t('notice'), ship_info: t('ship_info'), qty_discounts,
       biz_name: t('biz_name'), biz_owner: t('biz_owner'), biz_no: t('biz_no'), mail_order_no: t('mail_order_no'), biz_addr: t('biz_addr'),
       biz_phone: t('biz_phone'), biz_email: t('biz_email'), privacy_officer: t('privacy_officer') };

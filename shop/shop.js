@@ -601,9 +601,9 @@ const arrivalLabel = p => `${p.arrival} 입고 예정`;
 const STATUS_ORDER = { now: 0, soon: 1, out: 2 };
 const byAvail = (a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || (statusOf(a) === 'soon' ? String(a.arrival).localeCompare(String(b.arrival), 'ko', { numeric: true }) : 0);
 
-// NEW·BEST 는 관리자 설정(show_tags)을 켰을 때만. 평소엔 입고 상태 태그만 보여줌
-const tagsHtml = p => S.settings.show_tags ? `${p.is_best ? '<span class="tagb best">BEST</span>' : ''}${p.is_new ? '<span class="tagb new">NEW</span>' : ''}` : '';
-const statusTag = (p, status) => status === 'now' ? '<span class="tagb now">바로 출고</span>' : status === 'soon' ? `<span class="tagb soon">${esc(arrivalLabel(p))}</span>` : '';
+// 태그: BEST · NEW + 재고 0이고 입고 예정이 적힌 상품만 '○○ 입고 예정'
+const tagsHtml = p => `${p.is_best ? '<span class="tagb best">BEST</span>' : ''}${p.is_new ? '<span class="tagb new">NEW</span>' : ''}`;
+const statusTag = (p, status) => status === 'soon' ? `<span class="tagb soon">${esc(arrivalLabel(p))}</span>` : '';
 
 function productCard(p) {
   const s = productSummary(p);
@@ -623,8 +623,7 @@ function productCard(p) {
 
 function viewShop() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
-  const SPECIAL = { NOW: ['바로 출고', p => statusOf(p) === 'now'], SOON: ['입고 예정', p => statusOf(p) === 'soon'],
-    ...(S.settings.show_tags ? { NEW: ['NEW 신상품', p => p.is_new], BEST: ['BEST 베스트', p => p.is_best] } : {}) };
+  const SPECIAL = { NEW: ['NEW 신상품', p => p.is_new], BEST: ['BEST 베스트', p => p.is_best] };
   const match = (p, c) => c === '전체' || (SPECIAL[c] ? SPECIAL[c][1](p) : p.category === c);
   const count = c => sellable.filter(p => match(p, c)).length;
   const label = c => SPECIAL[c] ? SPECIAL[c][0] : c;
@@ -668,11 +667,7 @@ function viewShop() {
 // ---------------------------------------------------------------- 홈
 function viewHome() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
-  const tagsOn = S.settings.show_tags;
-  const news = tagsOn ? sellable.filter(p => p.is_new).slice(0, 4) : [], bests = tagsOn ? sellable.filter(p => p.is_best).slice(0, 4) : [];
-  const nowList = sellable.filter(p => statusOf(p) === 'now');
-  const soonGroups = {};
-  sellable.filter(p => statusOf(p) === 'soon').sort(byAvail).forEach(p => (soonGroups[p.arrival] = soonGroups[p.arrival] || []).push(p));
+  const news = sellable.filter(p => p.is_new).slice(0, 4), bests = sellable.filter(p => p.is_best).slice(0, 4);
   const tiers = tierText(S.settings);
   app().innerHTML = `
   <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${personName(S.dealer)}님, 안녕하세요</h1><p class="mut" style="margin:6px 0 0">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</p></div>
@@ -687,8 +682,6 @@ function viewHome() {
     </div>
   </div>
   ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
-  ${nowList.length ? `<div class="sec-h big now"><div><span class="sec-k">바로 출고</span><h2>지금 주문 가능 <em>${nowList.length}</em></h2><p>재고가 있어 입금 확인 후 바로 보내 드려요</p></div><a href="#/products" data-goto="NOW">전체 보기 →</a></div><div class="row4">${nowList.map(productCard).join('')}</div>` : ''}
-  ${Object.entries(soonGroups).map(([when, ps]) => `<div class="sec-h big soon"><div><span class="sec-k">입고 예정</span><h2>${esc(when)} 입고 예정 <em>${ps.length}</em></h2><p>아직 주문은 안 돼요 · 상품에서 입고 알림을 신청해 두세요</p></div><a href="#/products" data-goto="SOON">전체 보기 →</a></div><div class="row4">${ps.slice(0, 4).map(productCard).join('')}</div>`).join('')}
   ${news.length ? `<div class="sec-h"><h2>신규 입고</h2><a href="#/products" data-goto="NEW">신상품 전체 →</a></div><div class="row4">${news.map(productCard).join('')}</div>` : ''}
   ${bests.length ? `<div class="sec-h"><h2>베스트 상품</h2><a href="#/products" data-goto="BEST">베스트 전체 →</a></div><div class="row4">${bests.map(productCard).join('')}</div>` : ''}
   <div class="home-more"><a class="btn pri" href="#/products" data-goto="전체">전체 상품 보기 (${sellable.length})</a>
