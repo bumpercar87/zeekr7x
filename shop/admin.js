@@ -53,6 +53,7 @@ const api = DEMO ? demoAdminApi() : {
   // 포인트
   async points() { const { data, error } = await sb.from('point_ledger').select('*').order('created_at', { ascending: false }).limit(2000); if (error) throw error; return data || []; },
   async addPoints(rows) { const { error } = await sb.from('point_ledger').insert(rows); if (error) throw error; },
+  async resyncSheets() { const { data, error } = await sb.rpc('admin_resync_sheets'); if (error) throw error; return data; },
   async updSettings(patch) { const { error } = await sb.from('shop_settings').update(patch).eq('id', 1); if (error) throw error; },
   // 메인 배너
   async banners() { const { data, error } = await sb.from('banners').select('*').order('sort').order('id'); if (error) throw error; return data || []; },
@@ -121,6 +122,7 @@ function demoAdminApi() {
       data.dealers = data.dealers.filter(x => x.id !== id);
     },
     async updSettings(patch) { Object.assign(data.settings, patch); },
+    async resyncSheets() { return { orders: data.orders.length, dealers: data.dealers.filter(d => !d.is_admin).length, inquiries: data.inquiries.length }; },
     async banners() { return (store('zk_demo_banners') || []).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)); },
     async uploadBanner(file) { return await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(file); }); },
     async saveBanner(id, patch) { const l = store('zk_demo_banners') || []; if (id) Object.assign(l.find(x => x.id === id), patch); else l.push({ id: Date.now(), active: true, sort: l.length, ...patch }); store('zk_demo_banners', l); },
@@ -201,7 +203,7 @@ function viewOrders() {
   app().innerHTML = `
   <div class="page-head">
     <div><div class="eyebrow">Orders</div><h1>주문 현황</h1></div>
-    <div class="bar" style="margin:0"><button class="btn sm ghost" id="refresh">새로고침</button>${window.SHEET_URL ? `<a class="btn sm pri" href="${esc(window.SHEET_URL)}" target="_blank" rel="noopener">구글 시트 열기 ↗</a>` : ''}<button class="btn sm ghost" id="csv">CSV 다운로드</button></div>
+    <div class="bar" style="margin:0"><button class="btn sm ghost" id="refresh">새로고침</button>${window.SHEET_URL ? `<button class="btn sm ghost" id="resync" title="시트를 지금 쇼핑몰 데이터로 새로 덮어씁니다">시트 다시 맞추기</button><a class="btn sm pri" href="${esc(window.SHEET_URL)}" target="_blank" rel="noopener">구글 시트 열기 ↗</a>` : ''}<button class="btn sm ghost" id="csv">CSV 다운로드</button></div>
   </div>
   <div class="kpis" style="grid-template-columns:repeat(${kpis.length},1fr)">
     ${kpis.map(([k, l, arr]) => `<button class="kpi ${A.f.st === k ? 'on' : ''}" data-st="${k}"><div class="l">${l}</div><div class="v">${arr.length}</div><div class="s">${won(sum(arr))}원</div></button>`).join('')}
@@ -239,6 +241,11 @@ function viewOrders() {
   $('#from').onchange = e => { A.f.from = e.target.value; viewOrders(); };
   $('#to').onchange = e => { A.f.to = e.target.value; viewOrders(); };
   $('#refresh').onclick = async () => { await reload(); viewOrders(); toast('최신 주문을 불러왔습니다'); };
+  $('#resync') && ($('#resync').onclick = async () => {
+    if (!await ask('구글 시트를 지금 쇼핑몰 데이터로 다시 맞출까요?\n주문 · 주문상품 · 딜러 · 문의 시트를 비우고 새로 채웁니다. (메일은 안 나가요)', { ok: '다시 맞추기' })) return;
+    try { const r = await api.resyncSheets(); toast(`시트로 보냈습니다 · 주문 ${r.orders}건 · 딜러 ${r.dealers}곳 · 문의 ${r.inquiries}건 (반영까지 몇 초~1분)`, 5000); }
+    catch (e) { toast(/admin_resync_sheets/.test(e.message || '') ? 'SQL 38번을 먼저 실행해 주세요' : errMsg(e), 5000); }
+  });
   $('#csv').onclick = () => downloadCSV(list);
   $$('tr.main').forEach(tr => tr.onclick = () => { const id = +tr.dataset.id; A.open.has(id) ? A.open.delete(id) : A.open.add(id); viewOrders(); });
   bindDetail();
