@@ -796,3 +796,5 @@ ul.inq-guide b{color:var(--ink)}
 
 /* 공지 본문: 한글 단어 중간에서 줄이 끊기지 않게 */
 .np-body,.ntc .bd,.np-item h3{word-break:keep-all;overflow-wrap:anywhere}
+.all-h{scroll-margin-top:90px}
+@media (max-width:860px){.all-h{scroll-margin-top:110px}}

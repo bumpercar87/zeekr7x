@@ -682,7 +682,7 @@ function viewHome() {
   const bs = S.banners || [];
   app().innerHTML = `
   ${bs.length ? `<div class="hero">
-    <div class="hero-track" id="hero">${bs.map(b => `<a class="hero-slide" ${b.link ? `href="${esc(b.link)}"` : ''}><img src="${esc(b.image_url)}" alt="${esc(b.title || '')}"></a>`).join('')}</div>
+    <div class="hero-track" id="hero">${bs.map(b => `<a class="hero-slide" ${b.link === '#/products' ? 'href="#/" data-toall' : b.link ? `href="${esc(b.link)}"` : ''}><img src="${esc(b.image_url)}" alt="${esc(b.title || '')}"></a>`).join('')}</div>
     ${bs.length > 1 ? `<button class="hero-nav prev" data-hn="-1" aria-label="이전 배너">‹</button><button class="hero-nav next" data-hn="1" aria-label="다음 배너">›</button>
     <div class="hero-dots">${bs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
   </div>` : ''}
@@ -691,6 +691,8 @@ function viewHome() {
   <div class="home-cats">${['전체', ...cats].map(c => `<button type="button" class="${c === hc ? 'on' : ''}" data-hcat="${esc(c)}">${esc(c)} ${c === '전체' ? sellable.length : sellable.filter(p => p.category === c).length}</button>`).join('')}</div>
   <div class="grid home-grid">${shown.map(productCard).join('')}</div>`;
   $$('[data-hcat]').forEach(b => b.onclick = () => { S.homeCat = b.dataset.hcat; const y = scrollY; viewHome(); scrollTo(0, y); });
+  // 배너 '전체 상품 목록' → 같은 화면의 상품 목록으로 부드럽게 이동
+  $$('[data-toall]').forEach(a => a.onclick = e => { e.preventDefault(); $('.all-h')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   startHero();
   noticePopup();
 }

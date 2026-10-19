@@ -770,7 +770,7 @@ async function viewBanners() {
   let list;
   try { list = await api.banners(); }
   catch (e) { app().innerHTML = `<div class="empty">배너를 불러오지 못했습니다.<br><span class="small">${esc(errMsg(e))}<br>SQL 35번을 실행했는지 확인해 주세요.</span></div>`; return; }
-  const prodOpts = sel => `<option value="">누르면 이동 안 함</option>${A.products.map(p => `<option value="#/p/${p.id}" ${sel === '#/p/' + p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}`;
+  const prodOpts = sel => `<option value="">누르면 이동 안 함</option><option value="#/products" ${sel === '#/products' ? 'selected' : ''}>전체 상품 목록 (홈 상품 목록으로 내려감)</option>${A.products.map(p => `<option value="#/p/${p.id}" ${sel === '#/p/' + p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}`;
   app().innerHTML = `
   <div class="page-head"><div><div class="eyebrow">Banner · ${list.length}</div><h1>메인 배너</h1></div>
     <div class="small mut">딜러 첫 화면 맨 위에서 5초마다 넘어가요. 켜진 배너가 없으면 배너 자리가 사라져요.</div></div>
