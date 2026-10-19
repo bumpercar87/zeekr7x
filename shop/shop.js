@@ -51,6 +51,19 @@ const api = DEMO ? demoApi() : {
     const { data, error } = await sb.rpc('my_coupons');
     if (error) throw error; return data || [];
   },
+  // 포인트: 잔액 + 최근 내역
+  async myPoints() {
+    const [b, l] = await Promise.all([
+      sb.rpc('point_balance'),
+      sb.from('point_ledger').select('*').eq('dealer_id', S.user.id).order('created_at', { ascending: false }).limit(50),
+    ]);
+    if (b.error) throw b.error;
+    return { balance: b.data || 0, list: l.data || [] };
+  },
+  async placeOrderPoints(a) {
+    const { data, error } = await sb.rpc('place_order_points', a);
+    if (error) throw error; return data;
+  },
   async checkCoupon(code) {
     const { data, error } = await sb.rpc('check_coupon', { p_code: code });
     if (error) throw error; return data;
@@ -218,6 +231,18 @@ function demoApi() {
       store('zk_demo_inq', list);
     },
     async publicProducts() { return (await (await fetch('demo_products.json', { cache: 'no-store' })).json()); },
+    async myPoints() {
+      const l = store('zk_demo_points') || [{ id: 1, amount: 5000, kind: 'grant', reason: '오픈 감사 포인트', created_at: new Date().toISOString() }];
+      return { balance: l.reduce((a, x) => a + x.amount, 0), list: [...l].reverse() };
+    },
+    async placeOrderPoints(a) {
+      const r = await this.placeOrder(a), pts = a.p_points || 0;
+      const o = orders.find(x => x.order_no === r.order_no);
+      Object.assign(o, { points_used: pts, total: o.total - pts }); store('zk_demo_orders', orders);
+      const l = store('zk_demo_points') || [{ id: 1, amount: 5000, kind: 'grant', reason: '오픈 감사 포인트', created_at: new Date().toISOString() }];
+      l.push({ id: Date.now(), amount: -pts, kind: 'use', reason: '주문 사용 · ' + r.order_no, created_at: new Date().toISOString() }); store('zk_demo_points', l);
+      return { ...r, total: o.total };
+    },
     async myRestock() { return (store('zk_demo_restock') || []).map(r => r.product_id); },
     async addRestock(pid) { const l = (store('zk_demo_restock') || []).filter(r => r.product_id !== pid); l.push({ dealer_id: 'demo', product_id: pid, created_at: new Date().toISOString(), notified_at: null }); store('zk_demo_restock', l); },
     async delRestock(pid) { store('zk_demo_restock', (store('zk_demo_restock') || []).filter(r => r.product_id !== pid)); },
@@ -1015,6 +1040,7 @@ function viewCart() {
   // 주문 일시 중지 (관리자 설정) — 장바구니·견적서는 그대로, 관리자 계정은 테스트용으로 주문 가능
   const closed = st.orders_open === false && !d.is_admin;
   const cdisc = cp ? couponDiscount(cp, sub, ship) : 0;
+  if (S.points === undefined) { S.points = null; api.myPoints().then(x => { S.points = x; if (location.hash === '#/cart') viewCart(); }).catch(() => { S.points = { balance: 0, list: [] }; }); }
   // 입력하던 주문서 내용 유지 (수량을 바꿔 화면을 다시 그려도 지워지지 않게)
   const D = S.draft = S.draft || {
     orderer_name: d.manager_name, orderer_phone: d.phone,
@@ -1025,6 +1051,11 @@ function viewCart() {
   const store = D.dest === 'store';
   if (D.tax || !CARD_ON()) D.pay = 'bank';
   const card = D.pay === 'card';
+  // 포인트: 보유 잔액과 결제 금액 안에서만 (카드 결제는 포인트 미사용)
+  const ptBal = S.points?.balance || 0;
+  const ptMax = Math.max(0, Math.min(ptBal, sub + ship - cdisc));
+  const pts = card ? 0 : Math.min(Math.max(0, D.points || 0), ptMax);
+  const pay = sub + ship - cdisc - pts;
 
   app().innerHTML = `
   <div class="page-head"><div><div class="eyebrow">Cart · Checkout</div><h1>장바구니 · 주문서</h1></div></div>
@@ -1081,11 +1112,16 @@ function viewCart() {
       <div class="row"><span>배송비</span><b>${ship ? won(ship) + '원' : '무료'}</b></div>
       ${need > 0 ? `<div class="free">${won(need)}원 더 담으면 무료배송</div>` : ''}
       ${couponBox(sub, ship)}
-      <div class="row tot"><span>${card ? '총 결제금액' : '총 입금액'}</span><b>${won(sub + ship - cdisc)}원</b></div>
+      ${ptBal > 0 && !card ? `<div class="pt-box">
+        <div class="cp-h">포인트 <span class="mut small">보유 ${won(ptBal)}P</span></div>
+        <div class="cp-code-row"><input id="ptin" inputmode="numeric" value="${pts || ''}" placeholder="사용할 포인트"><button class="btn sm" id="ptall" type="button">전액 사용</button></div>
+        ${pts ? `<div class="row disc-row"><span>포인트 사용</span><b>−${won(pts)}원</b></div>` : ''}
+      </div>` : ''}
+      <div class="row tot"><span>${card ? '총 결제금액' : '총 입금액'}</span><b>${won(pay)}원</b></div>
       ${card ? '<p class="small mut" style="margin:14px 0">결제 방법 · <b style="color:var(--ink)">카드 · 간편결제</b><br>다음 화면에서 결제창이 열려요. 결제가 끝나면 바로 입금확인 처리됩니다.</p>'
         : `<p class="small mut" style="margin:14px 0">결제 방법 · <b style="color:var(--ink)">무통장 입금</b><br>주문 후 ${st.pay_deadline_days || 3}일 이내 입금해 주세요. 기한이 지나면 자동 취소됩니다.</p>`}
       ${closed ? `<div class="closed-note"><b>지금은 주문을 받지 않아요</b><div>${esc(st.orders_closed_msg || '입고 준비 중입니다. 주문이 열리면 공지로 알려드릴게요.')}</div></div>` : ''}
-      <button class="btn pri block" id="order" ${blocked || closed ? 'disabled' : ''}>${closed ? '주문 준비 중' : `${won(sub + ship - cdisc)}원 ${card ? '카드 결제하기' : '주문하기'}`}</button>
+      <button class="btn pri block" id="order" ${blocked || closed ? 'disabled' : ''}>${closed ? '주문 준비 중' : `${won(pay)}원 ${card ? '카드 결제하기' : '주문하기'}`}</button>
       <div class="err" id="ordererr">${blocked ? '재고·수량을 확인해 주세요.' : ''}</div>
       <button class="btn ghost block" id="quote" style="margin-top:10px">견적서 받기 (인쇄 · PDF)</button>
       ${tierText(st) ? `<p class="small mut" style="margin-top:12px">수량 할인: ${tierText(st)} (같은 상품 옵션 합산)</p>` : ''}
@@ -1094,11 +1130,17 @@ function viewCart() {
   $('#quote').onclick = () => printDoc({
     kind: '견 적 서', no: '', date: `견적일 ${fmtDT(new Date()).slice(0, 10)} · 유효기간 7일`,
     to: { company: `${d.company}${d.branch ? ' ' + d.branch : ''}`, manager: d.manager_name, phone: d.phone, biz_no: d.biz_no },
-    items: quote, shipping: ship, total: sub + ship - cdisc, biz: S.info, coupon: cp ? { name: cp.name, discount: cdisc } : null,
+    items: quote, shipping: ship, total: pay, biz: S.info, coupon: cp ? { name: cp.name, discount: cdisc } : null, points: pts,
     note: `· 표시 금액은 부가세 포함 금액입니다.\n· 결제: 무통장 입금 (주문 후 ${st.pay_deadline_days || 3}일 이내)\n· 재고 상황에 따라 수량이 변동될 수 있습니다.`,
   });
 
   bindCoupon();
+  const ptin = $('#ptin');
+  if (ptin) {
+    const setPts = v => { D.points = Math.min(Math.max(0, Math.floor(v / 10) * 10), ptMax); viewCart(); };   // 10원 단위
+    ptin.onchange = () => setPts(parseInt(ptin.value.replace(/\D/g, '')) || 0);
+    $('#ptall').onclick = () => setPts(ptMax);
+  }
   const f = $('#of');
   if (!store && D.c_addr2) f.addr2.value = D.c_addr2;
   if (store && D.addr2) f.addr2.value = D.addr2;
@@ -1143,7 +1185,7 @@ function viewCart() {
     try { S.settings = (await api.catalog()).settings || S.settings; } catch (e) { /* 그대로 진행 */ }
     btn.disabled = false;
     if (cartTotal() !== sub + ship - cdisc) { viewCart(); toast('가격·배송비가 변경되어 다시 계산했어요. 금액을 확인하고 다시 주문해 주세요.', 4000); return; }
-    if (!await ask(card ? `총 ${won(sub + ship - cdisc)}원을 카드로 결제할까요?\n배송: ${dest} (${t(f.ship_name.value)})\n결제창에서 30분 안에 결제하지 않으면 주문이 자동 취소돼요.` : `총 ${won(sub + ship - cdisc)}원을 주문하시겠습니까?\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: card ? '결제하기' : '주문하기' })) return;
+    if (!await ask(card ? `총 ${won(pay)}원을 카드로 결제할까요?\n배송: ${dest} (${t(f.ship_name.value)})\n결제창에서 30분 안에 결제하지 않으면 주문이 자동 취소돼요.` : `총 ${won(pay)}원을 주문하시겠습니까?${pts ? `\n(포인트 ${won(pts)}P 사용)` : ''}\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: card ? '결제하기' : '주문하기' })) return;
     btn.disabled = true; btn.textContent = '주문 처리 중…'; err.textContent = '';
     try {
       const common = {
@@ -1154,15 +1196,16 @@ function viewCart() {
         ...(cp ? (cp.code ? { p_coupon_code: cp.code } : { p_coupon_id: cp.id }) : {}),
         ...(DEMO && cp ? { _coupon: cp } : {}),
       };
-      const r = card ? await api.placeOrderCard(common) : await api.placeOrder({ ...common, p_depositor: t(D.depositor),
-        p_tax_invoice: !!D.tax, p_tax_biz_no: D.tax ? t(D.tax_biz_no) : null, p_tax_email: D.tax ? t(D.tax_email) : null });
+      const bankArgs = { ...common, p_depositor: t(D.depositor),
+        p_tax_invoice: !!D.tax, p_tax_biz_no: D.tax ? t(D.tax_biz_no) : null, p_tax_email: D.tax ? t(D.tax_email) : null };
+      const r = card ? await api.placeOrderCard(common) : pts ? await api.placeOrderPoints({ ...bankArgs, p_points: pts }) : await api.placeOrder(bankArgs);
       // 기본 배송지 저장 / 비어 있던 사업자번호 채우기
       const patch = {};
       if (store && D.save_addr && addr !== S.dealer.address) patch.address = addr;
       if (D.tax && !S.dealer.biz_no) patch.biz_no = t(D.tax_biz_no);
       if (Object.keys(patch).length) { try { await api.updateMe(patch); Object.assign(S.dealer, patch); } catch (e) {} }
       setCart([]);
-      S.orders = null; S.draft = null; S.coupon = null; S.myCoupons = undefined;
+      S.orders = null; S.draft = null; S.coupon = null; S.myCoupons = undefined; S.points = undefined;
       await refreshStock();
       if (card) {   // 주문 생성 → 결제창 (실패·닫기 시 주문내역에서 다시 결제 가능)
         btn.textContent = '결제창 여는 중…';
@@ -1207,6 +1250,7 @@ function viewMe() {
       <button class="btn pri" type="submit">저장</button><div class="err" id="merr"></div>
     </form>
     <div class="me-side">
+    <div class="panel my-cp" id="mypt" hidden></div>
     <div class="panel my-cp" id="mycp"><h2>내 쿠폰</h2><div class="mut small">불러오는 중…</div></div>
     <form id="pf" class="panel" novalidate>
       <h2>비밀번호 변경</h2>
@@ -1226,6 +1270,13 @@ function viewMe() {
       ? list.map(c => `<div class="cp-item"><b>${esc(c.name)}</b><div class="small">${couponLabel(c)}${c.min_order ? ` · ${won(c.min_order)}원 이상` : ''}${c.first_order_only ? ' · 첫 주문' : ''}</div>${c.ends_at ? `<div class="small mut">${fmtDT(c.ends_at).slice(0, 10)}까지</div>` : ''}</div>`).join('') + '<p class="small mut" style="margin:10px 0 0">주문서의 쿠폰 칸에서 골라 쓰세요.</p>'
       : '<div class="mut small">사용 가능한 쿠폰이 없습니다. 쿠폰 코드가 있다면 주문서에서 입력하세요.</div>');
   }).catch(() => { const el = $('#mycp'); if (el) el.remove(); });
+  api.myPoints().then(x => {
+    S.points = x;
+    const el = $('#mypt'); if (!el || (!x.balance && !x.list.length)) return;
+    el.hidden = false;
+    el.innerHTML = `<h2>내 포인트 <b class="pt-bal">${won(x.balance)}P</b></h2><div class="small mut" style="margin-bottom:8px">주문서에서 1P = 1원으로 사용할 수 있어요.</div>` +
+      x.list.slice(0, 10).map(l => `<div class="pt-row"><div><b>${esc(l.reason || { grant: '지급', deduct: '차감', use: '주문 사용', refund: '취소 환불' }[l.kind] || '')}</b><div class="small mut">${fmtDT(l.created_at)}</div></div><b class="${l.amount > 0 ? 'plus' : ''}">${l.amount > 0 ? '+' : '−'}${won(Math.abs(l.amount))}P</b></div>`).join('');
+  }).catch(() => {});
   const f = $('#mf');
   f.phone.oninput = () => f.phone.value = fmtPhone(f.phone.value);
   if (f.biz_no) f.biz_no.oninput = () => f.biz_no.value = fmtBiz(f.biz_no.value);
@@ -1329,6 +1380,7 @@ function bankBox(o) {
 const itemsTable = o => `<table class="itbl">${(o.order_items || []).map(it => `<tr><td>${esc(it.product_name)} <span class="mut">· ${esc(it.option_name)}</span></td><td class="n">${it.discount_rate ? `<em class="disc">${it.discount_rate}%</em> ` : ''}${won(it.unit_price)} × ${it.qty}</td><td class="n">${won(it.line_total)}원</td></tr>`).join('')}
   <tr><td class="mut">배송비</td><td></td><td class="n">${o.shipping_fee ? won(o.shipping_fee) + '원' : '무료'}</td></tr>
   ${o.coupon_discount ? `<tr><td class="mut">쿠폰 · ${esc(o.coupon_name || '')}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.coupon_discount)}원</td></tr>` : ''}
+  ${o.points_used ? `<tr><td class="mut">포인트 사용</td><td></td><td class="n" style="color:var(--acc)">−${won(o.points_used)}원</td></tr>` : ''}
   <tr class="tt"><td>합계</td><td></td><td class="n">${won(o.total)}원</td></tr></table>`;
 
 function printStatement(o, kind = '거 래 명 세 서') {
@@ -1337,7 +1389,7 @@ function printStatement(o, kind = '거 래 명 세 서') {
     kind, no: o.order_no, date: `주문일 ${fmtDT(o.created_at).slice(0, 10)}`,
     to: { company: `${d.company}${d.branch ? ' ' + d.branch : ''}`, manager: o.orderer_name || d.manager_name, phone: o.orderer_phone || d.phone, biz_no: o.tax_biz_no || d.biz_no },
     items: o.order_items || [], shipping: o.shipping_fee, total: o.total, biz: S.info,
-    coupon: o.coupon_discount ? { name: o.coupon_name, discount: o.coupon_discount } : null,
+    coupon: o.coupon_discount ? { name: o.coupon_name, discount: o.coupon_discount } : null, points: o.points_used || 0,
     note: `· 표시 금액은 부가세 포함 금액입니다.\n· 받는 분: ${o.ship_name} (${o.ship_phone}) ${o.ship_address}`,
   });
 }

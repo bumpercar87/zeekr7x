@@ -50,6 +50,9 @@ const api = DEMO ? demoAdminApi() : {
     }
   },
   async delCoupon(id) { const { error } = await sb.from('coupons').delete().eq('id', id); if (error) throw error; },
+  // 포인트
+  async points() { const { data, error } = await sb.from('point_ledger').select('*').order('created_at', { ascending: false }).limit(2000); if (error) throw error; return data || []; },
+  async addPoints(rows) { const { error } = await sb.from('point_ledger').insert(rows); if (error) throw error; },
   async updSettings(patch) { const { error } = await sb.from('shop_settings').update(patch).eq('id', 1); if (error) throw error; },
   // 메인 배너
   async banners() { const { data, error } = await sb.from('banners').select('*').order('sort').order('id'); if (error) throw error; return data || []; },
@@ -111,6 +114,8 @@ function demoAdminApi() {
       if (grants) c.coupon_grants = grants.map(d => ({ dealer_id: d }));
     },
     async delCoupon(id) { data.coupons = data.coupons.filter(x => x.id !== id); },
+    async points() { return store('zk_demo_adm_points') || []; },
+    async addPoints(rows) { const l = store('zk_demo_adm_points') || []; rows.forEach((r, i) => l.unshift({ id: Date.now() + i, created_at: new Date().toISOString(), ...r })); store('zk_demo_adm_points', l); },
     async delDealer(id) {
       if (data.orders.some(o => o.dealer_id === id || (id === 'demo' && o.dealers))) throw new Error('주문 내역이 있는 딜러는 삭제할 수 없습니다. 거래 기록 보관을 위해 [이용 중지]로 처리해 주세요.');
       data.dealers = data.dealers.filter(x => x.id !== id);
@@ -155,7 +160,7 @@ function renderNav() {
     <a href="#/dealers" class="${on('#/dealers')}">딜러${nDealer ? `<span class="pill">${nDealer}</span>` : ''}</a>
     <a href="#/activity" class="${on('#/activity')}">딜러 활동</a>
     <a href="#/inquiries" class="${on('#/inquiries')}">문의${A.inquiries.filter(q => q.status === 'open').length ? `<span class="pill">${A.inquiries.filter(q => q.status === 'open').length}</span>` : ''}</a>
-    <a href="#/coupons" class="${on('#/coupons')}">쿠폰</a>
+    <a href="#/coupons" class="${on('#/coupons')}">쿠폰·포인트</a>
     <a href="#/banners" class="${on('#/banners')}">배너</a>
     <a href="#/notices" class="${on('#/notices')}">공지</a>
     <a href="#/settings" class="${on('#/settings')}">설정</a>
@@ -250,6 +255,7 @@ function orderDetail(o) {
       <table>${items.map(i => `<tr><td>${esc(i.product_name)} <span class="mut">· ${esc(i.option_name)} · ${esc(i.sku || '')}</span></td><td class="n">${i.discount_rate ? `<span style="color:var(--acc)">${i.discount_rate}%↓</span> ` : ''}${won(i.unit_price)} × ${i.qty}</td><td class="n">${won(i.line_total)}원</td></tr>`).join('')}
         <tr><td class="mut">배송비</td><td></td><td class="n">${o.shipping_fee ? won(o.shipping_fee) + '원' : '무료'}</td></tr>
         ${o.coupon_discount ? `<tr><td class="mut">쿠폰 · ${esc(o.coupon_name || '')}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.coupon_discount)}원</td></tr>` : ''}
+        ${o.points_used ? `<tr><td class="mut">포인트 사용</td><td></td><td class="n" style="color:var(--acc)">−${won(o.points_used)}원</td></tr>` : ''}
         <tr><td><b>합계</b></td><td></td><td class="n"><b>${won(o.total)}원</b></td></tr></table>
       ${o.status !== 'cancelled' ? `
       <div class="stat-btns">
@@ -331,13 +337,13 @@ function bindDetail() {
 }
 
 function downloadCSV(list) {
-  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일', '쿠폰', '쿠폰할인', '결제수단'];
+  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일', '쿠폰', '쿠폰할인', '포인트사용', '결제수단'];
   const rows = [];
   for (const o of list) for (const [k, i] of (o.order_items || []).entries()) {
     const d = o.dealers || {};
     rows.push([fmtDT(o.created_at), o.order_no, STATUS[o.status], d.company, d.branch, d.manager_name, d.phone, i.product_name, i.option_name, i.sku, i.unit_price, i.qty, i.line_total,
       k === 0 ? o.shipping_fee : '', k === 0 ? o.total : '', o.depositor_name, o.ship_name, o.ship_phone, o.ship_address, o.memo, o.carrier, o.tracking_no, fmtDT(o.paid_at), fmtDT(o.shipped_at), fmtDT(o.delivered_at), o.admin_memo,
-      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email, k === 0 ? o.coupon_name : '', k === 0 ? o.coupon_discount || '' : '', o.pay_method === 'card' ? (o.pay_info?.cancelledAt ? '카드(환불)' : o.payment_key ? '카드' : '카드(미결제)') : '무통장']);
+      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email, k === 0 ? o.coupon_name : '', k === 0 ? o.coupon_discount || '' : '', k === 0 ? o.points_used || '' : '', o.pay_method === 'card' ? (o.pay_info?.cancelledAt ? '카드(환불)' : o.payment_key ? '카드' : '카드(미결제)') : '무통장']);
   }
   const csv = [head, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
@@ -660,6 +666,66 @@ const CP_TARGET = { code: '코드 입력', all: '전체 딜러', assigned: '지�
 const cpBenefit = c => c.kind === 'amount' ? `${won(c.value)}원 할인` : c.kind === 'percent' ? `${c.value}% 할인${c.max_discount ? ` (최대 ${won(c.max_discount)}원)` : ''}` : '배송비 무료';
 const dayStr = t => t ? new Date(t).toLocaleDateString('sv-SE') : '';
 
+const cpTabs = on => `<div class="filters" style="margin-bottom:18px"><a class="chip ${on === 'c' ? 'on' : ''}" href="#/coupons">쿠폰</a><a class="chip ${on === 'p' ? 'on' : ''}" href="#/coupons/points">포인트</a></div>`;
+const PT_KIND = { grant: '지급', deduct: '차감', use: '주문 사용', refund: '취소 환불' };
+
+async function viewPoints() {
+  app().innerHTML = '<div class="loading">불러오는 중…</div>';
+  let led;
+  try { led = await api.points(); }
+  catch (e) { app().innerHTML = cpTabs('p') + `<div class="empty">포인트를 불러오지 못했습니다.<br><span class="small">${esc(errMsg(e))}<br>SQL 36번을 실행했는지 확인해 주세요.</span></div>`; return; }
+  const dealers = A.dealers.filter(d => !d.is_admin && d.status === 'approved');
+  const bal = {}; led.forEach(l => bal[l.dealer_id] = (bal[l.dealer_id] || 0) + l.amount);
+  const dn = id => { const d = A.dealers.find(x => x.id === id); return d ? `${esc(d.company)} ${esc(d.branch || '')} <span class="mut">${esc(d.manager_name)}</span>` : '<span class="mut">(삭제된 딜러)</span>'; };
+  const sel = A.ptDealer;
+  const hist = sel ? led.filter(l => l.dealer_id === sel) : led;
+  app().innerHTML = `
+  <div class="page-head"><div><div class="eyebrow">Point</div><h1>쿠폰 · 포인트</h1></div>
+    <div class="small mut">1P = 1원. 딜러가 주문서에서 쓰면 주문 합계에서 빠지고, 주문이 취소되면 자동으로 돌려줍니다.</div></div>
+  ${cpTabs('p')}
+  <div class="cp-grid">
+    <form id="ptf" class="panel" novalidate>
+      <h2>포인트 지급 · 차감</h2>
+      <div class="field"><label>구분</label>
+        <div class="seg3"><label><input type="radio" name="kind" value="grant" checked> 지급 (+)</label><label><input type="radio" name="kind" value="deduct"> 차감 (−)</label></div></div>
+      <div class="field"><label>포인트<em>*</em></label><input name="amount" inputmode="numeric" placeholder="예) 10000"></div>
+      <div class="field"><label>사유 <span class="mut" style="font-weight:400">(딜러에게 보여요)</span></label><input name="reason" placeholder="예) 오픈 감사 포인트"></div>
+      <div class="field"><label>딜러 선택 (승인된 딜러 ${dealers.length}곳) <button class="btn sm ghost" type="button" id="ptallchk" style="margin-left:6px">전체 선택</button></label>
+        <div class="grant-list">${dealers.length ? dealers.map(d => `<label><input type="checkbox" name="dealer" value="${d.id}" ${sel === d.id ? 'checked' : ''}><span style="flex:1">${dn(d.id)}</span><span class="mut small">${won(bal[d.id] || 0)}P</span></label>`).join('') : '<span class="mut small">아직 승인된 딜러가 없습니다.</span>'}</div></div>
+      <button class="btn pri" type="submit">적용</button>
+    </form>
+    <div>
+      <div class="tbl-wrap" style="margin-bottom:22px"><table class="tbl">
+        <thead><tr><th>딜러</th><th class="n">보유 포인트</th><th></th></tr></thead>
+        <tbody>${dealers.map(d => `<tr class="${sel === d.id ? 'sel' : ''}"><td>${dn(d.id)}</td><td class="n"><b>${won(bal[d.id] || 0)}P</b></td>
+          <td><button class="btn sm ghost" data-pth="${d.id}">${sel === d.id ? '전체 내역' : '내역'}</button></td></tr>`).join('')}</tbody></table></div>
+      <h3 style="margin:0 0 10px">${sel ? '선택한 딜러 내역' : '최근 내역'}</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>일시</th><th>딜러</th><th>구분</th><th>사유</th><th class="n">포인트</th></tr></thead>
+        <tbody>${!hist.length ? '<tr><td colspan="5" class="mut" style="text-align:center;padding:40px">아직 포인트 내역이 없습니다.</td></tr>' : hist.slice(0, 200).map(l => `<tr>
+          <td class="d">${fmtDT(l.created_at)}</td><td>${dn(l.dealer_id)}</td><td>${PT_KIND[l.kind] || l.kind}</td><td>${esc(l.reason || '')}</td>
+          <td class="n"><b style="${l.amount > 0 ? 'color:var(--acc)' : ''}">${l.amount > 0 ? '+' : '−'}${won(Math.abs(l.amount))}</b></td></tr>`).join('')}</tbody></table></div>
+    </div>
+  </div>`;
+  const f = $('#ptf');
+  $('#ptallchk').onclick = () => { const bs = $$('input[name=dealer]', f), all = bs.every(b => b.checked); bs.forEach(b => b.checked = !all); };
+  $$('[data-pth]').forEach(b => b.onclick = () => { A.ptDealer = A.ptDealer === b.dataset.pth ? null : b.dataset.pth; viewPoints(); });
+  f.amount.oninput = () => { const v = f.amount.value.replace(/[^\d]/g, ''); f.amount.value = v ? won(+v) : ''; };
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const kind = f.kind.value, amt = +(f.amount.value.replace(/[^\d]/g, '') || 0), reason = f.reason.value.trim();
+    const ids = $$('input[name=dealer]:checked', f).map(x => x.value);
+    if (!amt) return toast('포인트를 입력해 주세요');
+    if (!ids.length) return toast('딜러를 한 곳 이상 골라 주세요');
+    if (kind === 'deduct') { const over = ids.filter(id => (bal[id] || 0) < amt); if (over.length) return toast(`보유 포인트보다 많이 차감할 수 없습니다 (${over.length}곳)`, 4000); }
+    if (!await ask(`${ids.length}곳에 ${won(amt)}P ${kind === 'grant' ? '지급' : '차감'}할까요?`, { ok: kind === 'grant' ? '지급' : '차감', danger: kind === 'deduct' })) return;
+    try {
+      await api.addPoints(ids.map(id => ({ dealer_id: id, amount: kind === 'grant' ? amt : -amt, kind, reason: reason || (kind === 'grant' ? '포인트 지급' : '포인트 차감') })));
+      toast(`${ids.length}곳에 ${won(amt)}P ${kind === 'grant' ? '지급' : '차감'}했습니다`); viewPoints();
+    } catch (err) { toast(errMsg(err), 4000); }
+  };
+}
+
 function viewCoupons() {
   const ed = A.editCoupon ? A.coupons.find(c => c.id === A.editCoupon) : null;
   const used = id => A.orders.filter(o => o.coupon_id === id && o.status !== 'cancelled').length;
@@ -667,8 +733,9 @@ function viewCoupons() {
   const granted = new Set((ed?.coupon_grants || []).map(g => g.dealer_id));
   const f0 = ed || { kind: 'amount', target: 'code', once_per_dealer: true, first_order_only: false, active: true, min_order: 0 };
   app().innerHTML = `
-  <div class="page-head"><div><div class="eyebrow">Coupon · ${A.coupons.length}</div><h1>쿠폰</h1></div>
+  <div class="page-head"><div><div class="eyebrow">Coupon · ${A.coupons.length}</div><h1>쿠폰 · 포인트</h1></div>
     <div class="small mut">쿠폰 할인은 수량 할인이 적용된 상품 금액에서 추가로 빠집니다.</div></div>
+  ${cpTabs('c')}
   <div class="cp-grid">
     <form id="cf" class="panel" novalidate>
       <h2>${ed ? '쿠폰 수정' : '새 쿠폰'}</h2>
@@ -1050,6 +1117,7 @@ function route() {
   else if (h.startsWith('#/settings')) viewSettings();
   else if (h.startsWith('#/notices')) viewNotices();
   else if (h.startsWith('#/inquiries')) viewInquiriesAdmin();
+  else if (h.startsWith('#/coupons/points')) viewPoints();
   else if (h.startsWith('#/coupons')) viewCoupons();
   else if (h.startsWith('#/activity')) viewActivity();
   else if (h.startsWith('#/banners')) viewBanners();

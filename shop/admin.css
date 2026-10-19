@@ -199,3 +199,4 @@
 .bn-mup{display:inline-flex;align-items:center;gap:6px;color:var(--ink2)}
 .bn-mup input{font-size:12px;max-width:200px}
 @media (max-width:860px){ .bn-imgs{flex-wrap:wrap} .bn-imgs > img{width:100%} }
+.field .grant-list label input{width:auto;flex:none;padding:0}

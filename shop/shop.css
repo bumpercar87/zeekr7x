@@ -808,3 +808,10 @@ ul.inq-guide b{color:var(--ink)}
 .np-more:hover{border-color:var(--ink)}
 .np-btns{position:sticky;bottom:-1px;background:#fff;padding-top:12px}
 .np-more[hidden]{display:none}
+
+/* 포인트 */
+.pt-box{border-bottom:1px dashed var(--hair2);margin:0 0 8px;padding:0 0 10px}
+.pt-box .cp-code-row input{text-transform:none}
+.pt-bal{color:var(--acc);font-size:18px;margin-left:6px}
+.pt-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--hair)}
+.pt-row b.plus{color:var(--acc)}
