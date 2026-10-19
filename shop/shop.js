@@ -464,7 +464,8 @@ function renderFooter() {
     row('연락처', [i.biz_phone, i.biz_email].filter(Boolean).join(' · ')), row('개인정보 관리책임자', i.privacy_officer)].join('');
   f.innerHTML = `<div class="wrap">
     <img class="ft-logo" src="img/brand/bringgo_pc_line_black.png" alt="bringgo" width="116" height="50">
-    <div class="ft-links"><a href="#/terms">이용약관</a><a href="#/privacy"><b>개인정보 처리방침</b></a>${S.user && !S.guest ? '<a href="#/notices">공지사항</a><a href="#/inquiries">1:1 문의</a>' : ''}${window.KAKAO_CHANNEL_URL ? `<a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의</a>` : ''}</div>
+    <div class="ft-links">${S.user && !S.guest ? '<a href="#/notices">공지사항</a><a href="#/inquiries">1:1 문의</a>' : ''}${window.KAKAO_CHANNEL_URL ? `<a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의</a>` : ''}</div>
+    <div class="ft-links ft-policy"><a href="#/terms">이용약관</a><a href="#/privacy"><b>개인정보 처리방침</b></a></div>
     ${rows ? `<details class="ft-biz"><summary>사업자 정보</summary><div class="ft-info">${rows}</div></details>` : ''}
     <div class="ft-copy">© ${new Date().getFullYear()} ${esc(i.biz_name || 'BRINGGO')}. 딜러 전용 B2B 주문 사이트</div>
   </div>`;
@@ -1458,6 +1459,7 @@ async function viewInquiries() {
   app().innerHTML = `
   <div class="page-head"><div><div class="eyebrow">Inquiry · ${list.length}</div><h1>1:1 문의</h1></div>
     <div class="inq-acts">${window.KAKAO_CHANNEL_URL ? `<a class="btn kakao-btn" href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">${KAKAO_ICON}카카오톡 문의</a>` : ''}<a class="btn pri" href="#/inquiries/new">새 문의 작성</a></div></div>
+  ${S.notices?.length ? `<a class="inq-notice" href="#/notices"><span class="k">공지</span><span class="t">${esc(S.notices[0].title)}</span><span class="go">공지 전체 보기 →</span></a>` : ''}
   <ul class="inq-guide">
     ${window.KAKAO_CHANNEL_URL ? '<li><b>빠른 질문</b>(재고, 출고일, 호환 여부)은 <b>카카오톡 채팅</b>이 가장 빨라요.</li>' : ''}
     <li><b>교환·반품·불량, 대량 견적, 세금계산서</b>처럼 기록이 필요한 문의는 [새 문의 작성]으로 남겨 주세요. 답변이 달리면 메일로 알려 드립니다.</li>

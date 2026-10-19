@@ -772,3 +772,17 @@ ul.inq-guide b{color:var(--ink)}
   .home-info{font-size:13px;gap:4px 12px}
   .np-btns .btn{flex:1 1 40%}
 }
+
+/* 하단 링크 정리 · 문의 페이지 최근 공지 */
+.ft-links{flex-wrap:wrap;gap:6px 0;margin-bottom:8px}
+.ft-links:empty{display:none}
+.ft-links a{white-space:nowrap;position:relative;padding:0 12px}
+.ft-links a:first-child{padding-left:0}
+.ft-links a + a::before{content:"";position:absolute;left:0;top:50%;width:1px;height:11px;margin-top:-5px;background:var(--hair2)}
+.ft-policy{margin-bottom:12px;font-size:13px}
+.inq-notice{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--hair);padding:11px 14px;margin:0 0 12px;color:var(--ink)}
+.inq-notice .k{flex:none;font-size:12px;font-weight:800;color:var(--acc);border:1px solid var(--acc);padding:1px 6px}
+.inq-notice .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.inq-notice .go{flex:none;font-size:13px;color:var(--mut)}
+.inq-notice:hover{border-color:var(--ink)}
+@media (max-width:860px){ .inq-notice .go{font-size:12.5px} }
