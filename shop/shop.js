@@ -197,7 +197,7 @@ function demoApi() {
       for (const it of o.order_items) { const v = variants.find(x => x.id === it.variant_id); if (v) v.stock += it.qty; }
       store('zk_demo_orders', orders);
     },
-    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 0, image_url: 'img/banner/open_A2.jpg', link: '#/products' }, { id: 1, image_url: 'img/banner/sample_door.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/banner/sample_dealer.jpg', link: '#/products' }]; },
+    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 0, image_url: 'img/banner/open_A2.jpg', image_mobile_url: 'img/banner/open_A2_m.jpg', link: '#/products' }, { id: 1, image_url: 'img/banner/sample_door.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/banner/sample_dealer.jpg', link: '#/products' }]; },
     async notices() {
       const t = Date.now();
       return [
@@ -682,7 +682,7 @@ function viewHome() {
   const bs = S.banners || [];
   app().innerHTML = `
   ${bs.length ? `<div class="hero">
-    <div class="hero-track" id="hero">${bs.map(b => `<a class="hero-slide" ${b.link === '#/products' ? 'href="#/" data-toall' : b.link ? `href="${esc(b.link)}"` : ''}><img src="${esc(b.image_url)}" alt="${esc(b.title || '')}"></a>`).join('')}</div>
+    <div class="hero-track" id="hero">${bs.map(b => `<a class="hero-slide" ${b.link === '#/products' ? 'href="#/" data-toall' : b.link ? `href="${esc(b.link)}"` : ''}><picture>${b.image_mobile_url ? `<source media="(max-width:860px)" srcset="${esc(b.image_mobile_url)}">` : ''}<img src="${esc(b.image_url)}" alt="${esc(b.title || '')}"></picture></a>`).join('')}</div>
     ${bs.length > 1 ? `<button class="hero-nav prev" data-hn="-1" aria-label="이전 배너">‹</button><button class="hero-nav next" data-hn="1" aria-label="다음 배너">›</button>
     <div class="hero-dots">${bs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
   </div>` : ''}

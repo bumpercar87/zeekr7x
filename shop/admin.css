@@ -190,3 +190,12 @@
   .bn-item{grid-template-columns:1fr}
   .bn-item img{width:100%}
 }
+.bn-preview.m img{max-width:300px;aspect-ratio:2/1}
+.bn-item{grid-template-columns:auto 1fr auto}
+.bn-imgs{display:flex;gap:8px;align-items:flex-start}
+.bn-imgs > img{width:300px}
+.bn-m img{width:150px;aspect-ratio:2/1;object-fit:cover;border:1px solid var(--hair)}
+.bn-m i{display:flex;align-items:center;justify-content:center;width:150px;aspect-ratio:2/1;border:1px dashed var(--hair2);font-size:12px;color:var(--mut);font-style:normal}
+.bn-mup{display:inline-flex;align-items:center;gap:6px;color:var(--ink2)}
+.bn-mup input{font-size:12px;max-width:200px}
+@media (max-width:860px){ .bn-imgs{flex-wrap:wrap} .bn-imgs > img{width:100%} }

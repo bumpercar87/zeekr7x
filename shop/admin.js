@@ -62,7 +62,8 @@ const api = DEMO ? demoAdminApi() : {
   async saveBanner(id, patch) { const q = id ? sb.from('banners').update(patch).eq('id', id) : sb.from('banners').insert(patch); const { error } = await q; if (error) throw error; },
   async delBanner(b) {
     const { error } = await sb.from('banners').delete().eq('id', b.id); if (error) throw error;
-    const m = String(b.image_url).match(/\/banners\/([^/?]+)$/); if (m) await sb.storage.from('banners').remove([m[1]]);
+    const files = [b.image_url, b.image_mobile_url].map(u => String(u || '').match(/\/banners\/([^/?]+)$/)?.[1]).filter(Boolean);
+    if (files.length) await sb.storage.from('banners').remove(files);
   },
   // 딜러 활동: 장바구니 전체 + 최근 30일 상품 조회
   async activity() {
@@ -776,20 +777,22 @@ async function viewBanners() {
     <div class="small mut">딜러 첫 화면 맨 위에서 5초마다 넘어가요. 켜진 배너가 없으면 배너 자리가 사라져요.</div></div>
   <form id="bf" class="panel bn-new" novalidate>
     <h2>새 배너 올리기</h2>
-    <p class="small mut" style="margin:-6px 0 14px">권장 크기 <b>가로 1200 × 세로 400px</b> (3:1) · JPG · 500KB 이하. 휴대폰에서는 양옆이 조금 잘려 보이니 <b>글자·상품은 가운데</b>에 두세요.</p>
+    <p class="small mut" style="margin:-6px 0 14px">PC용 <b>1200 × 400px</b> (3:1) · 휴대폰용 <b>800 × 400px</b> (2:1) · JPG · 500KB 이하. 휴대폰용을 안 올리면 PC 이미지의 양옆을 잘라서 보여줘요.</p>
     <div class="grid2">
-      <div class="field"><label>이미지<em>*</em></label><input type="file" name="file" accept="image/*"></div>
-      <div class="field"><label>관리용 이름</label><input name="title" placeholder="예) 도어 스위치 커버 오픈 기념"></div>
+      <div class="field"><label>PC 이미지<em>*</em> <span class="mut">1200×400</span></label><input type="file" name="file" accept="image/*"></div>
+      <div class="field"><label>휴대폰 이미지 <span class="mut">800×400 · 선택</span></label><input type="file" name="mfile" accept="image/*"></div>
     </div>
+    <div class="field"><label>관리용 이름</label><input name="title" placeholder="예) 정식 오픈 배너"></div>
     <div class="field"><label>누르면 이동할 상품</label><select name="link">${prodOpts('')}</select></div>
-    <div class="bn-preview" id="bnprev"></div>
+    <div class="bn-preview" id="bnprev"></div><div class="bn-preview m" id="bnprevm"></div>
     <button class="btn pri" type="submit">배너 올리기</button>
   </form>
   <div class="bn-list">${!list.length ? '<div class="empty">아직 배너가 없습니다.</div>' : list.map((b, i) => `
     <div class="bn-item ${b.active ? '' : 'off'}" data-bid="${b.id}">
-      <img src="${esc(b.image_url)}" alt="">
+      <div class="bn-imgs"><img src="${esc(b.image_url)}" alt=""><span class="bn-m">${b.image_mobile_url ? `<img src="${esc(b.image_mobile_url)}" alt="">` : '<i>휴대폰용 없음</i>'}</span></div>
       <div class="bn-meta">
         <b>${esc(b.title || '(이름 없음)')}</b>
+        <label class="small bn-mup">휴대폰 이미지 ${b.image_mobile_url ? '바꾸기' : '올리기'} <input type="file" accept="image/*" data-bmup></label>
         <select data-blink>${prodOpts(b.link || '')}</select>
         <div class="acts">
           <button class="btn sm ghost" data-bmv="-1" ${i === 0 ? 'disabled' : ''}>▲ 앞으로</button>
@@ -802,15 +805,17 @@ async function viewBanners() {
     </div>`).join('')}</div>`;
   const f = $('#bf');
   f.file.onchange = () => { const x = f.file.files[0]; $('#bnprev').innerHTML = x ? `<img src="${URL.createObjectURL(x)}" alt="">` : ''; };
+  f.mfile.onchange = () => { const x = f.mfile.files[0]; $('#bnprevm').innerHTML = x ? `<img src="${URL.createObjectURL(x)}" alt="">` : ''; };
   f.onsubmit = async e => {
     e.preventDefault();
     const file = f.file.files[0];
     if (!file) return toast('이미지를 골라 주세요');
-    if (file.size > 3 * 1024 * 1024) return toast('이미지가 너무 커요 (3MB 이하로 줄여 주세요)');
+    const mfile = f.mfile.files[0];
+    if (file.size > 3 * 1024 * 1024 || (mfile && mfile.size > 3 * 1024 * 1024)) return toast('이미지가 너무 커요 (3MB 이하로 줄여 주세요)');
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = '올리는 중…';
     try {
-      const url = await api.uploadBanner(file);
-      await api.saveBanner(null, { image_url: url, title: f.title.value.trim() || null, link: f.link.value || null, sort: list.length ? Math.max(...list.map(x => x.sort || 0)) + 1 : 0 });
+      const url = await api.uploadBanner(file), murl = mfile ? await api.uploadBanner(mfile) : null;
+      await api.saveBanner(null, { image_url: url, image_mobile_url: murl, title: f.title.value.trim() || null, link: f.link.value || null, sort: list.length ? Math.max(...list.map(x => x.sort || 0)) + 1 : 0 });
       toast('배너를 올렸습니다'); viewBanners();
     } catch (err) { toast(errMsg(err), 5000); btn.disabled = false; btn.textContent = '배너 올리기'; }
   };
@@ -818,6 +823,11 @@ async function viewBanners() {
     const b = list.find(x => x.id === +row.dataset.bid), i = list.indexOf(b);
     const save = async (patch, msg) => { try { await api.saveBanner(b.id, patch); toast(msg); viewBanners(); } catch (e) { toast(errMsg(e), 4000); } };
     $('[data-blink]', row).onchange = e => save({ link: e.target.value || null }, '이동할 상품을 바꿨습니다');
+    $('[data-bmup]', row).onchange = async e => {
+      const x = e.target.files[0]; if (!x) return;
+      try { const u = await api.uploadBanner(x); await api.saveBanner(b.id, { image_mobile_url: u }); toast('휴대폰 이미지를 올렸습니다'); viewBanners(); }
+      catch (err) { toast(errMsg(err), 4000); }
+    };
     $('[data-bact]', row).onclick = () => save({ active: !b.active }, b.active ? '배너를 껐습니다' : '배너를 켰습니다');
     $$('[data-bmv]', row).forEach(m => m.onclick = async () => {
       const o = list[i + +m.dataset.bmv]; if (!o) return;
