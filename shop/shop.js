@@ -606,9 +606,9 @@ const arrivalLabel = p => `${p.arrival} 입고 예정`;
 const STATUS_ORDER = { now: 0, soon: 1, out: 2 };
 const byAvail = (a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || (statusOf(a) === 'soon' ? String(a.arrival).localeCompare(String(b.arrival), 'ko', { numeric: true }) : 0);
 
-// 태그: BEST · NEW + 재고 0이고 입고 예정이 적힌 상품만 '○○ 입고 예정'
+// 태그: BEST · NEW + 입고 예정 칸에 글자가 있으면 재고와 상관없이 '○○ 입고 예정' (입고 후 칸을 비우면 사라짐)
 const tagsHtml = p => `${p.is_best ? '<span class="tagb best">BEST</span>' : ''}${p.is_new ? '<span class="tagb new">NEW</span>' : ''}`;
-const statusTag = (p, status) => status === 'soon' ? `<span class="tagb soon">${esc(arrivalLabel(p))}</span>` : '';
+const statusTag = (p, status) => p.arrival && status !== 'out' ? `<span class="tagb soon">${esc(arrivalLabel(p))}</span>` : '';
 
 function productCard(p) {
   const s = productSummary(p);
@@ -799,7 +799,8 @@ function viewProduct(id) {
       <p class="sub">${esc(p.subtitle || '')}</p>
       ${S.guest ? `<div class="price locked-pd"><span class="blur" aria-hidden="true">88,000원</span><small>회원 전용가 · 가입 승인 후 공개</small></div>`
         : `<div class="price"><span>${won(min)}원${max > min ? '~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>`}
-      ${status === 'soon' ? `<div class="arrive-line"><b>${esc(arrivalLabel(p))}</b> · 입고되면 주문할 수 있어요</div>` : status === 'out' ? '<div class="arrive-line out"><b>품절</b> · 재입고 일정은 문의해 주세요</div>' : ''}
+      ${status === 'now' && p.arrival ? `<div class="arrive-line"><b>${esc(arrivalLabel(p))}</b> · 지금 주문하시면 입고 후 순차 발송돼요</div>`
+        : status === 'soon' ? `<div class="arrive-line"><b>${esc(arrivalLabel(p))}</b> · 입고되면 주문할 수 있어요</div>` : status === 'out' ? '<div class="arrive-line out"><b>품절</b> · 재입고 일정은 문의해 주세요</div>' : ''}
       <div class="opt-label"><span>${!canBuy ? '옵션' : '옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span>'}</span></div>
       <div class="opts ${vs.some(v => v.image) ? '' : 'txtonly'}">${vs.map(v => `
         <button class="opt ${v.image ? '' : 'txt'} ${v.stock || !canBuy ? '' : 'out'}" data-v="${v.id}">

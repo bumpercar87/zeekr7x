@@ -365,7 +365,7 @@ function viewStock() {
       return `
       <tr class="grp ${p.active ? '' : 'off'}" data-pid="${p.id}"><td colspan="6"><span class="sorter"><button type="button" data-mv="-1" data-pid="${p.id}" title="위로" ${pi === 0 ? 'disabled' : ''}>▲</button><button type="button" data-mv="1" data-pid="${p.id}" title="아래로" ${pi === A.products.length - 1 ? 'disabled' : ''}>▼</button></span>${pi + 1}. ${esc(p.name)} <span class="mut" style="font-weight:400">· ${esc(p.category || '')}</span></td>
         <td><div class="flags">
-          <label class="small arr-in" title="재고가 0일 때 딜러 화면에 '○○ 입고 예정'으로 표시됩니다. 재고가 들어오면 자동으로 '바로 출고'가 됩니다.">입고 예정 <input data-parr="${p.id}" value="${esc(p.arrival)}" placeholder="예) 10월 중"></label>
+          <label class="small arr-in" title="적으면 딜러 화면에 '○○ 입고 예정' 태그가 붙어요. 재고가 있으면 주문 가능(입고 후 발송), 재고 0이면 입고 알림만. 물건이 들어오면 칸을 비우세요.">입고 예정 <input data-parr="${p.id}" value="${esc(p.arrival)}" placeholder="예) 10월 중"></label>
           <label class="small"><input type="checkbox" class="toggle" data-pflag="is_new" data-pid="${p.id}" ${p.is_new ? 'checked' : ''}> <span class="fl-new">NEW</span></label>
           <label class="small"><input type="checkbox" class="toggle" data-pflag="is_best" data-pid="${p.id}" ${p.is_best ? 'checked' : ''}> <span class="fl-best">BEST</span></label>
           <label class="small"><input type="checkbox" class="toggle" data-pact="${p.id}" ${p.active ? 'checked' : ''}> 상품 노출</label>
