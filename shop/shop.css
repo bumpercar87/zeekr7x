@@ -793,3 +793,6 @@ ul.inq-guide b{color:var(--ink)}
 .np-r{display:flex;gap:6px}
 .np-btns .np-r .btn{flex:none;min-height:40px;padding:0 14px;font-size:13.5px;display:inline-flex;align-items:center}
 @media (max-width:860px){ .np-btns .np-r .btn{flex:none} .np-btns .btn{flex:none} }
+
+/* 공지 본문: 한글 단어 중간에서 줄이 끊기지 않게 */
+.np-body,.ntc .bd,.np-item h3{word-break:keep-all;overflow-wrap:anywhere}
