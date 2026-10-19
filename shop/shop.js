@@ -667,7 +667,13 @@ function viewShop() {
 // ---------------------------------------------------------------- 홈
 function viewHome() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
-  const news = sellable.filter(p => p.is_new).slice(0, 4), bests = sellable.filter(p => p.is_best).slice(0, 4);
+  const newAll = sellable.filter(p => p.is_new), bestAll = sellable.filter(p => p.is_best);
+  // 홈 섹션: 상품 3개 + 4번째 칸은 '더 보기' 카드 (상품이 더 있다는 걸 바로 보이게)
+  const moreCard = (goto, n, label) => `<a class="card more-card" href="#/products" data-goto="${goto}"><div class="ph"><span class="mc-n">+${n}</span><span class="mc-t">${label}</span><span class="mc-go">보러 가기 →</span></div></a>`;
+  const section = (key, chip, title, sub, all) => !all.length ? '' : `
+  <div class="sec-h big tagged ${key.toLowerCase()}"><div><h2><span class="tagb ${key.toLowerCase()}">${chip}</span>${title} <em>${all.length}</em></h2><p>${sub}</p></div><a class="sec-all" href="#/products" data-goto="${key}">전체 보기 →</a></div>
+  <div class="row4">${all.slice(0, 3).map(productCard).join('')}${all.length > 3 ? moreCard(key, all.length - 3, `${chip} 상품 더 보기`) : moreCard('전체', sellable.length, '전체 상품 보기')}</div>`;
+  const cats = [...new Set(sellable.map(p => p.category).filter(Boolean))];
   const tiers = tierText(S.settings);
   app().innerHTML = `
   <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${personName(S.dealer)}님, 안녕하세요</h1><p class="mut" style="margin:6px 0 0">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</p></div>
@@ -682,9 +688,10 @@ function viewHome() {
     </div>
   </div>
   ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
-  ${news.length ? `<div class="sec-h"><h2>신규 입고</h2><a href="#/products" data-goto="NEW">신상품 전체 →</a></div><div class="row4">${news.map(productCard).join('')}</div>` : ''}
-  ${bests.length ? `<div class="sec-h"><h2>베스트 상품</h2><a href="#/products" data-goto="BEST">베스트 전체 →</a></div><div class="row4">${bests.map(productCard).join('')}</div>` : ''}
-  <div class="home-more"><a class="btn pri" href="#/products" data-goto="전체">전체 상품 보기 (${sellable.length})</a>
+  <div class="home-cats"><span>카테고리</span><a href="#/products" data-goto="전체" class="all">전체 상품 ${sellable.length}</a>${cats.map(c => `<a href="#/products" data-goto="${esc(c)}">${esc(c)}</a>`).join('')}</div>
+  ${section('NEW', 'NEW', '신규 입고', '새로 들어온 지커 7X 액세서리', newAll)}
+  ${section('BEST', 'BEST', '베스트 상품', '딜러분들이 가장 많이 찾는 상품', bestAll)}
+  <div class="home-more"><a class="btn pri big-all" href="#/products" data-goto="전체">전체 상품 ${sellable.length}개 보기 →</a>
     <p class="help-mini">궁금한 점이 있으신가요? <a href="#/inquiries/new">1:1 문의 →</a>${window.KAKAO_CHANNEL_URL ? ` <a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의 →</a>` : ''}</p></div>`;
   $$('[data-goto]').forEach(a => a.onclick = () => { S.filter = a.dataset.goto; });
   $$('[data-reorder]').forEach(b => b.onclick = () => reorder(+b.dataset.reorder));
