@@ -51,6 +51,19 @@ const api = DEMO ? demoAdminApi() : {
   },
   async delCoupon(id) { const { error } = await sb.from('coupons').delete().eq('id', id); if (error) throw error; },
   async updSettings(patch) { const { error } = await sb.from('shop_settings').update(patch).eq('id', 1); if (error) throw error; },
+  // 메인 배너
+  async banners() { const { data, error } = await sb.from('banners').select('*').order('sort').order('id'); if (error) throw error; return data || []; },
+  async uploadBanner(file) {
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase(), path = `b_${Date.now()}.${ext}`;
+    const { error } = await sb.storage.from('banners').upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    return sb.storage.from('banners').getPublicUrl(path).data.publicUrl;
+  },
+  async saveBanner(id, patch) { const q = id ? sb.from('banners').update(patch).eq('id', id) : sb.from('banners').insert(patch); const { error } = await q; if (error) throw error; },
+  async delBanner(b) {
+    const { error } = await sb.from('banners').delete().eq('id', b.id); if (error) throw error;
+    const m = String(b.image_url).match(/\/banners\/([^/?]+)$/); if (m) await sb.storage.from('banners').remove([m[1]]);
+  },
   // 딜러 활동: 장바구니 전체 + 최근 30일 상품 조회
   async activity() {
     const since = new Date(Date.now() - 30 * 864e5).toISOString();
@@ -102,6 +115,10 @@ function demoAdminApi() {
       data.dealers = data.dealers.filter(x => x.id !== id);
     },
     async updSettings(patch) { Object.assign(data.settings, patch); },
+    async banners() { return (store('zk_demo_banners') || []).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)); },
+    async uploadBanner(file) { return await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(file); }); },
+    async saveBanner(id, patch) { const l = store('zk_demo_banners') || []; if (id) Object.assign(l.find(x => x.id === id), patch); else l.push({ id: Date.now(), active: true, sort: l.length, ...patch }); store('zk_demo_banners', l); },
+    async delBanner(b) { store('zk_demo_banners', (store('zk_demo_banners') || []).filter(x => x.id !== b.id)); },
     async activity() {
       const c = store('zk_demo_cartsrv');
       return { carts: c ? [{ dealer_id: 'demo', ...c }] : [], views: store('zk_demo_views') || [], restock: store('zk_demo_restock') || [] };
@@ -138,6 +155,7 @@ function renderNav() {
     <a href="#/activity" class="${on('#/activity')}">딜러 활동</a>
     <a href="#/inquiries" class="${on('#/inquiries')}">문의${A.inquiries.filter(q => q.status === 'open').length ? `<span class="pill">${A.inquiries.filter(q => q.status === 'open').length}</span>` : ''}</a>
     <a href="#/coupons" class="${on('#/coupons')}">쿠폰</a>
+    <a href="#/banners" class="${on('#/banners')}">배너</a>
     <a href="#/notices" class="${on('#/notices')}">공지</a>
     <a href="#/settings" class="${on('#/settings')}">설정</a>
     <a href="index.html${DEMO ? location.search : ''}">딜러 화면</a>
@@ -236,7 +254,7 @@ function orderDetail(o) {
       <div class="stat-btns">
         ${next ? `<button class="btn sm pri" data-next="${next[0]}">${next[1]} →</button>` : ''}
         ${isCard && o.status === 'pending_payment' ? '<span class="small mut">카드 결제 대기 중 · 결제되면 자동 입금확인, 30분 지나면 자동 취소</span>' : ''}
-        ${cardPaid ? `<button class="btn sm ghost danger" data-cardcancel>결제 취소 (카드 환불)</button>`
+        ${cardPaid ? `<button class="btn sm ghost del-btn" data-cardcancel>결제 취소 (카드 환불)</button>`
           : o.status !== 'delivered' ? `<button class="btn sm ghost" data-cancel>${o.status === 'shipped' ? '주문 취소' : '주문 취소 (재고 복원)'}</button>` : ''}
         ${isCard && o.status === 'pending_payment' ? '' : `<select data-set title="상태 직접 변경" class="btn sm ghost" style="padding:6px 8px">
           <option value="">상태 직접 변경…</option>${FLOW.filter(s => s !== o.status && !(isCard && s === 'pending_payment')).map(s => `<option value="${s}">${STATUS[s]}</option>`).join('')}
@@ -482,13 +500,13 @@ function viewNotices() {
   const ed = A.editNotice ? A.notices.find(n => n.id === A.editNotice) : null;
   app().innerHTML = `
   <div class="page-head"><div><div class="eyebrow">Notice · ${A.notices.length}</div><h1>공지사항</h1></div>
-    <div class="small mut">가장 위 공지 한 줄이 딜러 상품 화면 맨 위에 보입니다.</div></div>
+    <div class="small mut">필독 공지는 딜러가 접속하면 팝업으로 떠요. 일반 공지는 사이트 맨 아래 '공지사항'에서 볼 수 있어요.</div></div>
   <div class="ntc-admin">
     <form id="nf" class="panel" novalidate>
       <h2>${ed ? '공지 수정' : '새 공지'}</h2>
       <div class="field"><label>제목<em>*</em></label><input name="title" value="${esc(ed?.title)}" placeholder="예) 10월 9일 한글날 휴무 안내"></div>
-      <div class="field"><label>내용</label><textarea name="body" rows="6" placeholder="첫 줄은 상품 화면 상단 띠에도 함께 보입니다.">${esc(ed?.body)}</textarea></div>
-      <label class="check"><input type="checkbox" name="pinned" ${ed?.pinned ? 'checked' : ''}> <span><b>필독</b> — 다른 공지보다 항상 위에 고정</span></label>
+      <div class="field"><label>내용</label><textarea name="body" rows="6" placeholder="팝업과 공지사항에 그대로 보여요.">${esc(ed?.body)}</textarea></div>
+      <label class="check"><input type="checkbox" name="pinned" ${ed?.pinned ? 'checked' : ''}> <span><b>필독</b> — 접속 시 팝업으로 보여줌 (딜러가 '오늘 하루 보지 않기' 가능)</span></label>
       <div style="display:flex;gap:8px"><button class="btn pri" type="submit">${ed ? '수정 저장' : '공지 올리기'}</button>${ed ? '<button class="btn ghost" type="button" id="cancelEd">취소</button>' : ''}</div>
     </form>
     <div class="tbl-wrap"><table class="tbl">
@@ -746,6 +764,73 @@ function viewCoupons() {
 
 // ---------------------------------------------------------------- 상품 문구 수정
 // 딜러 정보 수정 (딜러사명·지점명·사업자번호는 딜러가 직접 못 바꿔서 1:1 문의로 요청받아 여기서 변경)
+// ---------------------------------------------------------------- 메인 배너
+async function viewBanners() {
+  app().innerHTML = '<div class="loading">불러오는 중…</div>';
+  let list;
+  try { list = await api.banners(); }
+  catch (e) { app().innerHTML = `<div class="empty">배너를 불러오지 못했습니다.<br><span class="small">${esc(errMsg(e))}<br>SQL 35번을 실행했는지 확인해 주세요.</span></div>`; return; }
+  const prodOpts = sel => `<option value="">누르면 이동 안 함</option>${A.products.map(p => `<option value="#/p/${p.id}" ${sel === '#/p/' + p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}`;
+  app().innerHTML = `
+  <div class="page-head"><div><div class="eyebrow">Banner · ${list.length}</div><h1>메인 배너</h1></div>
+    <div class="small mut">딜러 첫 화면 맨 위에서 5초마다 넘어가요. 켜진 배너가 없으면 배너 자리가 사라져요.</div></div>
+  <form id="bf" class="panel bn-new" novalidate>
+    <h2>새 배너 올리기</h2>
+    <p class="small mut" style="margin:-6px 0 14px">권장 크기 <b>가로 1200 × 세로 400px</b> (3:1) · JPG · 500KB 이하. 휴대폰에서는 양옆이 조금 잘려 보이니 <b>글자·상품은 가운데</b>에 두세요.</p>
+    <div class="grid2">
+      <div class="field"><label>이미지<em>*</em></label><input type="file" name="file" accept="image/*"></div>
+      <div class="field"><label>관리용 이름</label><input name="title" placeholder="예) 도어 스위치 커버 오픈 기념"></div>
+    </div>
+    <div class="field"><label>누르면 이동할 상품</label><select name="link">${prodOpts('')}</select></div>
+    <div class="bn-preview" id="bnprev"></div>
+    <button class="btn pri" type="submit">배너 올리기</button>
+  </form>
+  <div class="bn-list">${!list.length ? '<div class="empty">아직 배너가 없습니다.</div>' : list.map((b, i) => `
+    <div class="bn-item ${b.active ? '' : 'off'}" data-bid="${b.id}">
+      <img src="${esc(b.image_url)}" alt="">
+      <div class="bn-meta">
+        <b>${esc(b.title || '(이름 없음)')}</b>
+        <select data-blink>${prodOpts(b.link || '')}</select>
+        <div class="acts">
+          <button class="btn sm ghost" data-bmv="-1" ${i === 0 ? 'disabled' : ''}>▲ 앞으로</button>
+          <button class="btn sm ghost" data-bmv="1" ${i === list.length - 1 ? 'disabled' : ''}>▼ 뒤로</button>
+          <button class="btn sm ghost" data-bact>${b.active ? '끄기' : '켜기'}</button>
+          <button class="btn sm ghost del-btn" data-bdel>삭제</button>
+        </div>
+      </div>
+      <span class="badge ${b.active ? 'st-paid' : 'st-cancelled'}">${b.active ? '노출 중' : '꺼짐'}</span>
+    </div>`).join('')}</div>`;
+  const f = $('#bf');
+  f.file.onchange = () => { const x = f.file.files[0]; $('#bnprev').innerHTML = x ? `<img src="${URL.createObjectURL(x)}" alt="">` : ''; };
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const file = f.file.files[0];
+    if (!file) return toast('이미지를 골라 주세요');
+    if (file.size > 3 * 1024 * 1024) return toast('이미지가 너무 커요 (3MB 이하로 줄여 주세요)');
+    const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = '올리는 중…';
+    try {
+      const url = await api.uploadBanner(file);
+      await api.saveBanner(null, { image_url: url, title: f.title.value.trim() || null, link: f.link.value || null, sort: list.length ? Math.max(...list.map(x => x.sort || 0)) + 1 : 0 });
+      toast('배너를 올렸습니다'); viewBanners();
+    } catch (err) { toast(errMsg(err), 5000); btn.disabled = false; btn.textContent = '배너 올리기'; }
+  };
+  $$('.bn-item').forEach(row => {
+    const b = list.find(x => x.id === +row.dataset.bid), i = list.indexOf(b);
+    const save = async (patch, msg) => { try { await api.saveBanner(b.id, patch); toast(msg); viewBanners(); } catch (e) { toast(errMsg(e), 4000); } };
+    $('[data-blink]', row).onchange = e => save({ link: e.target.value || null }, '이동할 상품을 바꿨습니다');
+    $('[data-bact]', row).onclick = () => save({ active: !b.active }, b.active ? '배너를 껐습니다' : '배너를 켰습니다');
+    $$('[data-bmv]', row).forEach(m => m.onclick = async () => {
+      const o = list[i + +m.dataset.bmv]; if (!o) return;
+      try { await api.saveBanner(b.id, { sort: o.sort ?? i + +m.dataset.bmv }); await api.saveBanner(o.id, { sort: b.sort ?? i }); if ((b.sort ?? 0) === (o.sort ?? 0)) { await api.saveBanner(b.id, { sort: i + +m.dataset.bmv }); await api.saveBanner(o.id, { sort: i }); } viewBanners(); }
+      catch (e) { toast(errMsg(e), 4000); }
+    });
+    $('[data-bdel]', row).onclick = async () => {
+      if (!await ask('이 배너를 삭제할까요?', { ok: '삭제', danger: true })) return;
+      try { await api.delBanner(b); toast('배너를 삭제했습니다'); viewBanners(); } catch (e) { toast(errMsg(e), 4000); }
+    };
+  });
+}
+
 // ---------------------------------------------------------------- 딜러 활동 (장바구니 · 상품 조회)
 async function viewActivity(force) {
   if (!A.act || force) {
@@ -957,6 +1042,7 @@ function route() {
   else if (h.startsWith('#/inquiries')) viewInquiriesAdmin();
   else if (h.startsWith('#/coupons')) viewCoupons();
   else if (h.startsWith('#/activity')) viewActivity();
+  else if (h.startsWith('#/banners')) viewBanners();
   else viewOrders();
 }
 

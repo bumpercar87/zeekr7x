@@ -105,6 +105,10 @@ const api = DEMO ? demoApi() : {
     const { data } = await sb.rpc('public_info');
     return data || {};
   },
+  async banners() {
+    const { data, error } = await sb.from('banners').select('*').eq('active', true).order('sort').order('id');
+    if (error) throw error; return data || [];
+  },
   async notices() {
     const { data, error } = await sb.from('notices').select('*').eq('active', true)
       .order('pinned', { ascending: false }).order('created_at', { ascending: false });
@@ -193,6 +197,7 @@ function demoApi() {
       for (const it of o.order_items) { const v = variants.find(x => x.id === it.variant_id); if (v) v.stock += it.qty; }
       store('zk_demo_orders', orders);
     },
+    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 1, image_url: 'img/p02/main1.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/p01/main1.jpg', link: '#/p/1' }]; },
     async notices() {
       const t = Date.now();
       return [
@@ -290,8 +295,7 @@ function renderNav() {
   const todo = (S.orders || []).filter(o => (o.status === 'pending_payment' && !o.paid_notified_at) || o.status === 'shipped').length;
   const openInq = (S.inquiries || []).filter(q => q.status === 'answered' && !store('zk_seen_' + q.id)).length;
   nav.innerHTML = `
-    <a href="#/" class="${c('#/')}">홈</a>
-    <a href="#/products" class="${c('#/products')}">상품</a>
+    <a href="#/" class="${c('#/') || c('#/products')}">상품</a>
     <a href="#/orders" class="${c('#/orders')}">주문내역${todo ? `<span class="cnt">${todo}</span>` : ''}</a>
     <a href="#/inquiries" class="${c('#/inquiries')}">문의${openInq ? `<span class="cnt">${openInq}</span>` : ''}</a>
     <a href="#/cart" class="${c('#/cart')}">장바구니${n ? `<span class="cnt">${n}</span>` : ''}</a>
@@ -460,7 +464,7 @@ function renderFooter() {
     row('연락처', [i.biz_phone, i.biz_email].filter(Boolean).join(' · ')), row('개인정보 관리책임자', i.privacy_officer)].join('');
   f.innerHTML = `<div class="wrap">
     <img class="ft-logo" src="img/brand/bringgo_pc_line_black.png" alt="bringgo" width="116" height="50">
-    <div class="ft-links"><a href="#/terms">이용약관</a><a href="#/privacy"><b>개인정보 처리방침</b></a>${S.user ? '<a href="#/inquiries">1:1 문의</a>' : ''}${window.KAKAO_CHANNEL_URL ? `<a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의</a>` : ''}</div>
+    <div class="ft-links"><a href="#/terms">이용약관</a><a href="#/privacy"><b>개인정보 처리방침</b></a>${S.user && !S.guest ? '<a href="#/notices">공지사항</a><a href="#/inquiries">1:1 문의</a>' : ''}${window.KAKAO_CHANNEL_URL ? `<a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의</a>` : ''}</div>
     ${rows ? `<details class="ft-biz"><summary>사업자 정보</summary><div class="ft-info">${rows}</div></details>` : ''}
     <div class="ft-copy">© ${new Date().getFullYear()} ${esc(i.biz_name || 'BRINGGO')}. 딜러 전용 B2B 주문 사이트</div>
   </div>`;
@@ -668,33 +672,67 @@ function viewShop() {
 function viewHome() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
   const cats = [...new Set(sellable.map(p => p.category).filter(Boolean))];
-  // 홈 = 전체 상품 진열대: 입고 예정·품절은 뒤로, 그 안에서 BEST 먼저, 나머지는 관리자 순서
+  // 전체 상품: 입고 예정·품절은 뒤로, 그 안에서 BEST 먼저, 나머지는 관리자 순서
   const ordered = [...sellable].sort((a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || (b.is_best ? 1 : 0) - (a.is_best ? 1 : 0) || (a.sort ?? 0) - (b.sort ?? 0));
   const hc = cats.includes(S.homeCat) ? S.homeCat : '전체';
   const shown = hc === '전체' ? ordered : ordered.filter(p => p.category === hc);
-  const tiers = tierText(S.settings);
+  const st = S.settings, tiers = tierText(st), cut = cutoffText(st.same_day_cutoff);
+  const info = [st.free_shipping_over ? `<b>${won(st.free_shipping_over)}원 이상</b> 무료배송` : '', tiers ? `수량 할인 <b>${tiers}</b>` : '', cut ? `<b>${cut}</b> 입금 확인분 당일 출고` : ''].filter(Boolean);
+  const bs = S.banners || [];
   app().innerHTML = `
-  <div class="home-hi"><div class="eyebrow">Dealer Home</div><h1>${personName(S.dealer)}님, 안녕하세요</h1><p class="mut" style="margin:6px 0 0">${esc(S.dealer.company)}${S.dealer.branch ? ' ' + esc(S.dealer.branch) : ''}</p></div>
-  <div id="topboxes">${topBoxes()}</div>
-  <div id="mhome">${mobileHome()}</div>
-  <div class="help-bar">
-    <span class="kk-badge" aria-hidden="true">${KAKAO_ICON}</span>
-    <div class="hb-t"><b>궁금한 점이 있으신가요?</b><span>${window.KAKAO_CHANNEL_URL ? '재고·출고일·호환 여부는 카카오톡으로 빠르게, 교환·반품·대량 견적은 1:1 문의로 남겨 주세요.' : '재고·출고일·호환 여부, 교환·반품·대량 견적 모두 1:1 문의로 남겨 주세요.'}</span></div>
-    <div class="hb-btns">
-      ${window.KAKAO_CHANNEL_URL ? `<a class="btn sm kakao-btn" href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">${KAKAO_ICON}카카오톡 문의</a>` : ''}
-      <a class="btn sm ghost" href="#/inquiries/new">1:1 문의</a>
-    </div>
-  </div>
-  ${tiers ? `<div class="tier-banner">수량 할인 · 같은 상품 옵션 합산 <b>${tiers}</b></div>` : ''}
+  ${bs.length ? `<div class="hero">
+    <div class="hero-track" id="hero">${bs.map(b => `<a class="hero-slide" ${b.link ? `href="${esc(b.link)}"` : ''}><img src="${esc(b.image_url)}" alt="${esc(b.title || '')}"></a>`).join('')}</div>
+    ${bs.length > 1 ? `<button class="hero-nav prev" data-hn="-1" aria-label="이전 배너">‹</button><button class="hero-nav next" data-hn="1" aria-label="다음 배너">›</button>
+    <div class="hero-dots">${bs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
+  </div>` : ''}
+  ${info.length ? `<div class="home-info">${info.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
   <div class="sec-h big tagged all-h"><div><h2>전체 상품 <em>${sellable.length}</em></h2><p>지커 7X 전용 액세서리 · 옵션 여러 개를 함께 담을 수 있어요</p></div></div>
-  <div class="home-cats">${['전체', ...cats].map(c => `<button type="button" class="${c === hc ? 'on' : ''}" data-hcat="${esc(c)}">${esc(c)}${c === '전체' ? ` ${sellable.length}` : ` ${sellable.filter(p => p.category === c).length}`}</button>`).join('')}</div>
-  <div class="grid home-grid">${shown.map(productCard).join('')}</div>
-  <div class="home-more">
-    <p class="help-mini">궁금한 점이 있으신가요? <a href="#/inquiries/new">1:1 문의 →</a>${window.KAKAO_CHANNEL_URL ? ` <a href="${esc(window.KAKAO_CHANNEL_URL)}" target="_blank" rel="noopener">카카오톡 문의 →</a>` : ''}</p></div>`;
+  <div class="home-cats">${['전체', ...cats].map(c => `<button type="button" class="${c === hc ? 'on' : ''}" data-hcat="${esc(c)}">${esc(c)} ${c === '전체' ? sellable.length : sellable.filter(p => p.category === c).length}</button>`).join('')}</div>
+  <div class="grid home-grid">${shown.map(productCard).join('')}</div>`;
   $$('[data-hcat]').forEach(b => b.onclick = () => { S.homeCat = b.dataset.hcat; const y = scrollY; viewHome(); scrollTo(0, y); });
-  $$('[data-reorder]').forEach(b => b.onclick = () => reorder(+b.dataset.reorder));
-  startRoll();
-  if (S.orders === null) loadOrders().then(() => { if ((location.hash || '#/') === '#/') viewHome(); }).catch(() => {});
+  startHero();
+  noticePopup();
+}
+
+// 메인 배너: 5초마다 넘김, 손으로 넘기면 잠시 멈춤
+function startHero() {
+  const el = $('#hero');
+  if (!el || el.children.length < 2) return;
+  const dots = $$('.hero-dots i');
+  let hold = 0;
+  const idx = () => Math.round(el.scrollLeft / el.clientWidth);
+  const go = i => { hold = Date.now(); el.scrollTo({ left: ((i + el.children.length) % el.children.length) * el.clientWidth, behavior: 'smooth' }); };
+  el.addEventListener('scroll', () => dots.forEach((d, i) => d.classList.toggle('on', i === idx())), { passive: true });
+  el.addEventListener('touchstart', () => { hold = Date.now(); }, { passive: true });
+  $$('[data-hn]').forEach(b => b.onclick = () => go(idx() + +b.dataset.hn));
+  const t = setInterval(() => {
+    if (!document.body.contains(el)) return clearInterval(t);
+    if (!el.clientWidth || Date.now() - hold < 7000) return;
+    const n = (idx() + 1) % el.children.length;
+    el.scrollTo({ left: n * el.clientWidth, behavior: n ? 'smooth' : 'auto' });
+  }, 5000);
+}
+
+// 필독 공지 팝업: 접속 후 한 번, '오늘 하루 보지 않기' 지원
+function noticePopup() {
+  if (S.popShown) return;
+  const today = new Date().toLocaleDateString('sv-SE');
+  const list = (S.notices || []).filter(n => n.pinned && store('zk_np_' + n.id) !== today);
+  if (!list.length) return;
+  S.popShown = true;
+  const ov = document.createElement('div');
+  ov.className = 'ask-ov np-ov';
+  ov.innerHTML = `<div class="ask np" role="dialog" aria-modal="true">
+    <div class="np-k">공지</div>
+    ${list.slice(0, 3).map(n => `<div class="np-item"><h3>${esc(n.title)}</h3><div class="np-body">${esc(n.body || '')}</div></div>`).join('')}
+    <div class="np-btns"><button class="btn ghost" data-np="today">오늘 하루 보지 않기</button><a class="btn ghost" href="#/notices" data-np="all">공지 전체 보기</a><button class="btn pri" data-np="close">닫기</button></div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.onclick = e => { if (e.target === ov) close(); };
+  ov.querySelector('[data-np="today"]').onclick = () => { list.forEach(n => store('zk_np_' + n.id, today)); close(); };
+  ov.querySelector('[data-np="all"]').onclick = close;
+  ov.querySelector('[data-np="close"]').onclick = close;
 }
 
 // 지난 주문 그대로 다시 담기 (판매 중·재고 있는 옵션만)
@@ -714,69 +752,6 @@ function reorder(orderId) {
 }
 
 // 상단 두 칸: 공지사항 · 내 주문 현황
-// 휴대폰 홈: 공지·수량할인·출고 안내를 한 줄 롤링(스와이프) + 진행 중 주문만 한 줄
-function mobileHome() {
-  const st = S.settings, tiers = tierText(st), cut = cutoffText(st.same_day_cutoff);
-  const items = [
-    ...S.notices.slice(0, 3).map(n => `<a class="ri" href="#/notices"><span class="rk">${n.pinned ? '필독' : '공지'}</span><span class="rt">${esc(n.title)}</span></a>`),
-    tiers ? `<a class="ri" href="#/products"><span class="rk">할인</span><span class="rt">수량 할인 <b>${tiers}</b> · 같은 상품 옵션 합산</span></a>` : '',
-    cut ? `<a class="ri" href="#/products"><span class="rk">출고</span><span class="rt"><b>${cut} 이전</b> 입금 확인분 당일 출고</span></a>` : '',
-  ].filter(Boolean);
-  const os = S.orders || [];
-  const cnt = st2 => os.filter(o => st2.includes(o.status)).length;
-  const parts = [['입금대기', cnt(['pending_payment'])], ['출고준비', cnt(['paid', 'preparing'])], ['배송중', cnt(['shipped'])]].filter(x => x[1]);
-  return `
-  ${items.length ? `<div class="roll"><div class="roll-track" id="roll">${items.join('')}</div>${items.length > 1 ? `<div class="roll-dots">${items.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}</div>` : ''}
-  ${parts.length ? `<a class="m-ord" href="#/orders"><span>진행 중 주문</span>${parts.map(([k, n]) => `<b>${k} ${n}</b>`).join('<i>·</i>')}<span class="go">→</span></a>` : ''}`;
-}
-
-// 롤링: 4초마다 다음 칸, 손으로 넘기면 그 위치에서 이어감
-function startRoll() {
-  const el = $('#roll');
-  if (!el || el.children.length < 2) return;
-  const dots = $$('.roll-dots i');
-  let hold = 0;
-  const idx = () => Math.round(el.scrollLeft / el.clientWidth);
-  el.addEventListener('scroll', () => dots.forEach((d, i) => d.classList.toggle('on', i === idx())), { passive: true });
-  el.addEventListener('touchstart', () => { hold = Date.now(); }, { passive: true });
-  const t = setInterval(() => {
-    if (!document.body.contains(el)) return clearInterval(t);
-    if (!el.clientWidth || Date.now() - hold < 6000) return;
-    const n = (idx() + 1) % el.children.length;
-    el.scrollTo({ left: n * el.clientWidth, behavior: n ? 'smooth' : 'auto' });
-  }, 4000);
-}
-
-function topBoxes() {
-  const n = S.notices[0];
-  const os = S.orders || [];
-  const pend = os.filter(o => o.status === 'pending_payment');
-  const prep = os.filter(o => o.status === 'paid' || o.status === 'preparing');
-  const ship = os.filter(o => o.status === 'shipped');
-  const lines = [];
-  if (pend.length) {
-    const due = pend.map(o => o.pay_deadline).sort()[0];
-    lines.push(`<span class="hl">입금대기 ${won(pend.reduce((a, o) => a + o.total, 0))}원</span> · 입금기한 ${fmtDT(due).slice(5)}`);
-  }
-  if (ship.length && ship[0].tracking_no) lines.push(`배송중 ${esc(ship[0].carrier || '')} ${esc(ship[0].tracking_no)}${ship.length > 1 ? ` 외 ${ship.length - 1}건` : ''}`);
-  const k = (label, arr, cls = '') => `<div class="kv ${arr.length ? cls : 'zero'}"><small>${label}</small><b>${arr.length}</b></div>`;
-  return `
-  <div class="topboxes">
-    <a class="tb" href="#/notices">
-      <div class="h"><span class="ttl">공지사항</span><span class="more">${S.notices.length > 1 ? `전체 ${S.notices.length}개 →` : '자세히 →'}</span></div>
-      ${n ? `
-        <div class="ntitle">${n.pinned ? '<span class="must">필독</span>' : ''}${esc(n.title)}</div>
-        <div class="nbody">${esc(n.body || '')}</div>
-        <div class="ndate">${fmtDT(n.created_at).slice(0, 10)}</div>`
-      : '<div class="empty-s">등록된 공지가 없습니다.</div>'}
-    </a>
-    <a class="tb" href="#/orders">
-      <div class="h"><span class="ttl">내 주문 현황</span><span class="more">주문내역 →</span></div>
-      <div class="kvs">${k('입금대기', pend, 'acc')}${k('출고준비', prep)}${k('배송중', ship)}</div>
-      <div class="oline">${lines.length ? lines.join('<br>') : '<span class="mut">진행 중인 주문이 없습니다.</span>'}</div>
-    </a>
-  </div>`;
-}
 
 // 공지 전체
 function viewNotices() {
@@ -1543,7 +1518,7 @@ async function route() {
   const [h, qs] = full.split('?');
   try {
     if (h.startsWith('/p/')) viewProduct(h.slice(3));
-    else if (h === '/products') viewShop();
+    else if (h === '/products') viewHome();
     else if (h === '/cart') viewCart();
     else if (h === '/orders') await viewOrders();
     else if (h === '/notices') viewNotices();
@@ -1581,6 +1556,7 @@ async function boot() {
     if (isPolicy()) { renderNav(); route(); if (!S.user) return; }
     if (!S.user) return guestRoute();
     S.guest = false;
+    renderFooter();
     S.dealer = await api.dealer(S.user.id);
     renderNav();
     if (!S.dealer) return viewNotice('계정 정보를 찾을 수 없습니다', '관리자에게 문의해 주세요.');
@@ -1589,7 +1565,8 @@ async function boot() {
     Object.assign(S, await api.catalog());
     await syncCart();
     await handlePayReturn();
-    const [ns, rs] = await Promise.allSettled([api.notices(), api.myRestock(), loadOrders(), loadInquiries()]);
+    const [ns, rs, bs] = await Promise.allSettled([api.notices(), api.myRestock(), api.banners(), loadOrders(), loadInquiries()]);
+    S.banners = bs.status === 'fulfilled' ? bs.value : [];
     S.restock = new Set(rs.status === 'fulfilled' ? rs.value : []);
     S.notices = ns.status === 'fulfilled' ? ns.value : [];
     route();
