@@ -798,3 +798,13 @@ ul.inq-guide b{color:var(--ink)}
 .np-body,.ntc .bd,.np-item h3{word-break:keep-all;overflow-wrap:anywhere}
 .all-h{scroll-margin-top:90px}
 @media (max-width:860px){.all-h{scroll-margin-top:110px}}
+
+/* 공지 팝업: 긴 글은 흐리게 자르고 '공지 전문 보기'로 펼침 */
+.np{max-height:86vh;overflow-y:auto;overscroll-behavior:contain}
+.np-body{max-height:230px;overflow:hidden}
+.np-item.clip .np-body{-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.np-item.open .np-body{max-height:none}
+.np-more{display:block;width:100%;margin-top:6px;padding:9px 0;border:1px solid var(--hair2);background:#fff;font:inherit;font-size:13.5px;font-weight:700;color:var(--ink2);cursor:pointer}
+.np-more:hover{border-color:var(--ink)}
+.np-btns{position:sticky;bottom:-1px;background:#fff;padding-top:12px}
+.np-more[hidden]{display:none}

@@ -727,10 +727,16 @@ function noticePopup() {
   ov.className = 'ask-ov np-ov';
   ov.innerHTML = `<div class="ask np" role="dialog" aria-modal="true">
     <div class="np-k">공지</div>
-    ${list.slice(0, 3).map(n => `<div class="np-item"><h3>${esc(n.title)}</h3><div class="np-body">${esc(n.body || '')}</div></div>`).join('')}
+    ${list.slice(0, 3).map(n => `<div class="np-item"><h3>${esc(n.title)}</h3><div class="np-body">${esc(n.body || '')}</div><button type="button" class="np-more" hidden>공지 전문 보기 ⌄</button></div>`).join('')}
     <div class="np-btns"><button class="np-today" data-np="today">오늘 하루 보지 않기</button><span class="np-r"><a class="btn sm ghost" href="#/notices" data-np="all">공지 전체 보기</a><button class="btn sm pri" data-np="close">닫기</button></span></div>
   </div>`;
   document.body.appendChild(ov);
+  // 길면 아래를 흐리게 + '공지 전문 보기' → 누르면 팝업 안에서 펼침 (휴대폰은 스크롤바가 안 보여서)
+  $$('.np-item', ov).forEach(it => {
+    const body = $('.np-body', it), more = $('.np-more', it);
+    if (body.scrollHeight > body.clientHeight + 4) { it.classList.add('clip'); more.hidden = false; }
+    more.onclick = () => { it.classList.remove('clip'); it.classList.add('open'); more.hidden = true; };
+  });
   const close = () => ov.remove();
   ov.onclick = e => { if (e.target === ov) close(); };
   ov.querySelector('[data-np="today"]').onclick = () => { list.forEach(n => store('zk_np_' + n.id, today)); close(); };
