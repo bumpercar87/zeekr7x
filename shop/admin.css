@@ -200,3 +200,8 @@
 .bn-mup input{font-size:12px;max-width:200px}
 @media (max-width:860px){ .bn-imgs{flex-wrap:wrap} .bn-imgs > img{width:100%} }
 .field .grant-list label input{width:auto;flex:none;padding:0}
+/* 메뉴가 많아 좁은 화면에서 로고와 겹치지 않게: 로고 옆 글자 숨기고, 그래도 넘치면 메뉴만 가로 스크롤 */
+header .brand{flex:none}
+header #nav{min-width:0;overflow-x:auto;scrollbar-width:none}
+header #nav::-webkit-scrollbar{display:none}
+@media (max-width:1240px){header .brand b,header .brand span,header .brand .brand-sep{display:none}}

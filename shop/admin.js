@@ -315,7 +315,7 @@ function bindDetail() {
     };
     const cc = $('[data-cancel]', box);
     if (cc) cc.onclick = () => {
-      const why = prompt(`${o.status === 'shipped' ? '이미 출고된 주문이라 재고는 되돌리지 않습니다.\n' : ''}취소 사유 (딜러에게 표시됩니다)`, '관리자 취소');
+      const why = prompt(`${o.status === 'shipped' ? '이미 출고된 주문이라 재고는 되돌리지 않습니다.\n' : ''}${o.points_used ? `사용한 포인트 ${won(o.points_used)}P는 딜러에게 자동으로 돌려줍니다.\n` : ''}취소 사유 (딜러에게 표시됩니다)`, '관리자 취소');
       if (why === null) return;  // 사유 입력이 필요해 prompt 유지
       set({ status: 'cancelled', cancel_reason: why || '관리자 취소' }, `${o.order_no} 취소${o.status === 'shipped' ? '' : ' · 재고 복원'}`);
     };

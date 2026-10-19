@@ -238,7 +238,9 @@ function demoApi() {
     async placeOrderPoints(a) {
       const r = await this.placeOrder(a), pts = a.p_points || 0;
       const o = orders.find(x => x.order_no === r.order_no);
-      Object.assign(o, { points_used: pts, total: o.total - pts }); store('zk_demo_orders', orders);
+      Object.assign(o, { points_used: pts, total: o.total - pts });
+      if (pts && !o.total) Object.assign(o, { status: 'paid', paid_at: new Date().toISOString(), depositor_name: '포인트 결제' });
+      store('zk_demo_orders', orders);
       const l = store('zk_demo_points') || [{ id: 1, amount: 5000, kind: 'grant', reason: '오픈 감사 포인트', created_at: new Date().toISOString() }];
       l.push({ id: Date.now(), amount: -pts, kind: 'use', reason: '주문 사용 · ' + r.order_no, created_at: new Date().toISOString() }); store('zk_demo_points', l);
       return { ...r, total: o.total };
@@ -1198,7 +1200,7 @@ function viewCart() {
       };
       const bankArgs = { ...common, p_depositor: t(D.depositor),
         p_tax_invoice: !!D.tax, p_tax_biz_no: D.tax ? t(D.tax_biz_no) : null, p_tax_email: D.tax ? t(D.tax_email) : null };
-      const r = card ? await api.placeOrderCard(common) : pts ? await api.placeOrderPoints({ ...bankArgs, p_points: pts }) : await api.placeOrder(bankArgs);
+      const r = card ? await api.placeOrderCard(common) : await api.placeOrderPoints({ ...bankArgs, p_points: pts });
       // 기본 배송지 저장 / 비어 있던 사업자번호 채우기
       const patch = {};
       if (store && D.save_addr && addr !== S.dealer.address) patch.address = addr;
@@ -1402,7 +1404,9 @@ async function viewDone(no) {
   <div class="done">
     <div class="eyebrow">Order Complete</div>
     <h1>${o.pay_method === 'card' && o.payment_key ? '결제가 완료되었습니다' : '주문이 접수되었습니다'}</h1>
-    ${o.pay_method === 'card' && o.payment_key
+    ${o.points_used && !o.total
+      ? `<p class="mut">주문번호 <b class="num" style="color:var(--ink)">${esc(o.order_no)}</b> · 포인트로 전액 결제되어 입금 없이 출고 준비를 시작합니다.</p>`
+      : o.pay_method === 'card' && o.payment_key
       ? `<p class="mut">주문번호 <b class="num" style="color:var(--ink)">${esc(o.order_no)}</b> · 결제가 확인되어 출고 준비를 시작합니다.</p>
          <div class="bank"><dl><dt>결제 금액</dt><dd class="amt">${won(o.total)}원</dd><dt>결제 수단</dt><dd>${payLine(o)}</dd></dl></div>`
       : cardPending(o) ? `<p class="mut">주문번호 <b class="num" style="color:var(--ink)">${esc(o.order_no)}</b> · 아직 결제가 끝나지 않았어요.</p>${cardBox(o)}`
@@ -1410,7 +1414,7 @@ async function viewDone(no) {
     <h2 style="margin-top:26px">주문 상품</h2>
     ${itemsTable(o)}
     <p class="small mut" style="margin-top:14px">받는 분 ${esc(o.ship_name)} · ${esc(o.ship_phone)} · ${esc(o.ship_address)}</p>
-    ${o.pay_method === 'card' ? '' : `<p class="small mut">${esc(S.settings.notice || '')}</p>`}
+    ${o.pay_method === 'card' || o.status !== 'pending_payment' ? '' : `<p class="small mut">${esc(S.settings.notice || '')}</p>`}
     <div class="done-acts"><a class="btn pri" href="#/orders">주문내역 보기</a><button class="btn" id="stmt">주문서 출력</button><a class="btn ghost" href="#/products">계속 둘러보기</a></div>
   </div>`;
   $('#stmt').onclick = () => printStatement(o, '주 문 서');
@@ -1481,7 +1485,8 @@ async function viewOrders() {
     }).join('')}
   </div>`}`;
   $$('[data-cancel]').forEach(b => b.onclick = async () => {
-    if (!await ask('이 주문을 취소하시겠습니까?\n담긴 상품의 재고가 복원됩니다.', { ok: '주문 취소', cancel: '닫기', danger: true })) return;
+    const o = orders.find(x => x.id === +b.dataset.cancel) || {};
+    if (!await ask(`이 주문을 취소하시겠습니까?\n담긴 상품의 재고가 복원됩니다.${o.points_used ? `\n사용한 포인트 ${won(o.points_used)}P는 다시 적립됩니다.` : ''}`, { ok: '주문 취소', cancel: '닫기', danger: true })) return;
     b.disabled = true;
     try { await api.cancel(+b.dataset.cancel); toast('주문을 취소했습니다'); await refreshStock(); viewOrders(); }
     catch (e) { toast(errMsg(e)); b.disabled = false; }
