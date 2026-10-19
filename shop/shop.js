@@ -458,6 +458,7 @@ function viewAuth(tab = 'login') {
         try { await api.signIn(v('email'), v('password')); }
         catch (e1) { if (/Email not confirmed/i.test(e1.message || '')) return viewVerify(v('email')); throw e1; }
       }
+      S.popShown = false;   // 같은 탭에서 로그아웃 → 다시 로그인해도 필독 공지가 뜨게
       await boot();
     } catch (e2) {
       err.textContent = errMsg(e2);
@@ -1637,7 +1638,9 @@ async function boot() {
     S.banners = bs.status === 'fulfilled' ? bs.value : [];
     S.restock = new Set(rs.status === 'fulfilled' ? rs.value : []);
     S.notices = ns.status === 'fulfilled' ? ns.value : [];
-    route();
+    await route();
+    // 로그인 직후 어느 화면에 도착하든 필독 공지 팝업 (홈이 아닌 화면이어도)
+    noticePopup();
   } catch (e) {
     app().innerHTML = `<div class="empty">연결에 실패했습니다.<br><span class="small">${esc(errMsg(e))}</span><br><button class="btn" onclick="location.reload()">새로고침</button></div>`;
   }
