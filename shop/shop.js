@@ -197,7 +197,7 @@ function demoApi() {
       for (const it of o.order_items) { const v = variants.find(x => x.id === it.variant_id); if (v) v.stock += it.qty; }
       store('zk_demo_orders', orders);
     },
-    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 1, image_url: 'img/p02/main1.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/p01/main1.jpg', link: '#/p/1' }]; },
+    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 1, image_url: 'img/banner/sample_door.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/banner/sample_dealer.jpg', link: '#/products' }]; },
     async notices() {
       const t = Date.now();
       return [
