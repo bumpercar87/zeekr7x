@@ -730,3 +730,17 @@ ul.inq-guide b{color:var(--ink)}
   .more-card .mc-n{font-size:28px}
   .home-more .big-all{display:block}
 }
+
+/* 홈 = 전체 상품 진열대 */
+.home-grid{grid-template-columns:repeat(4,1fr);gap:28px 20px;margin-top:18px}
+.home-cats{margin-top:4px}
+.home-cats button{font:inherit;font-size:14px;padding:6px 13px;border:1px solid var(--hair2);background:#fff;color:var(--ink2);border-radius:20px;cursor:pointer}
+.home-cats button.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+.home-cats button:hover{border-color:var(--ink)}
+.sec-h.big.all-h{margin-top:40px}
+.home-more{margin-top:44px}
+@media (max-width:860px){
+  .home-grid{grid-template-columns:repeat(2,1fr);gap:18px 12px}
+  .home-cats button{white-space:nowrap;flex:none;font-size:13.5px}
+  .sec-h.big.all-h{margin-top:28px}
+}
