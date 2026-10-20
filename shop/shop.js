@@ -220,7 +220,7 @@ function demoApi() {
       for (const it of o.order_items) { const v = variants.find(x => x.id === it.variant_id); if (v) v.stock += it.qty; }
       store('zk_demo_orders', orders);
     },
-    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 0, image_url: 'img/banner/open_A2.jpg', image_mobile_url: 'img/banner/open_A2_m.jpg', link: '#/products' }, { id: 1, image_url: 'img/banner/sample_door.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/banner/sample_dealer.jpg', link: '#/products' }]; },
+    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 0, image_url: 'img/banner/open_tone_pc.jpg', image_mobile_url: 'img/banner/open_tone_m.jpg', link: '#/products' }, { id: 1, image_url: 'img/banner/sample_door.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/banner/sample_dealer.jpg', link: '#/products' }]; },
     async notices() {
       const t = Date.now();
       return [

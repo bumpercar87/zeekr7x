@@ -880,3 +880,20 @@ ul.inq-guide b{color:var(--ink)}
 .kc-pick{font-style:normal;font-size:11.5px;font-weight:700;color:#fff;background:var(--acc);padding:1px 6px;margin-left:4px;vertical-align:1px}
 .kc-price{margin-top:auto;padding-top:12px;border-top:1px solid var(--hair)}
 @media (max-width:640px){.kc-bd{min-height:110px}.kc-price{padding-top:8px}}
+
+/* 톤다운 (2026-10-21): 주황은 할인·혜택 숫자에만. 나머지 강조는 검정·회색 */
+.brand span{color:var(--dim)}
+#nav .cnt{background:var(--ink)}
+.eyebrow{color:var(--dim)}
+.home-info b{color:var(--ink)}
+.notice .ic,.np-k{color:var(--ink)}
+.tagb.new,.tagb.kit{background:var(--ink)}
+.tagb.soon,.card .ph .tagb.soon,.pd .cat .tagb.soon{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.kit-tag{background:var(--ink)}
+.kc-pick{background:none;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.ks-n{background:var(--ink)}
+.feats li:before,.intro-pts li:before{background:var(--ink)}
+.btn.pri:hover{background:#333;border-color:#333}
+.sec-h.big.tagged.new{border-top-color:var(--ink)}
+.sec-h.big.tagged.new h2 em{background:var(--ink)}
+.arrive-line b{color:var(--ink)}
