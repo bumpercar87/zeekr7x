@@ -172,9 +172,9 @@ function demoApi() {
         features: ['낱개로 사는 것보다 10% 더 할인', '칸마다 옵션을 골라 한 번에 담기', '출고 선물·인도 서비스용으로 추천'],
         slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }],
         image: 'shop/img/kit/k1_main1.jpg', images: ['shop/img/kit/k1_main1.jpg'] },
-        { id: 2, name: '출고 선물 패키지 플러스', subtitle: '출고 선물 3종 + 운전석 실리콘 아이템 1종 골라 담기', discount_rate: 12,
+        { id: 2, name: '출고 선물 패키지 플러스', subtitle: '출고 선물 3종 + 센터콘솔 아이템 1종 골라 담기', discount_rate: 12,
         features: ['낱개로 사는 것보다 12% 더 할인', '무선충전 패드 · 컵홀더 · 암레스트 수납함 중 1종 선택', '출고 선물·인도 서비스용으로 추천'],
-        slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }, { label: '운전석 실리콘 아이템 (1종 선택)', product_ids: [5, 11, 7] }],
+        slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }, { label: '센터콘솔 아이템 (1종 선택)', product_ids: [5, 11, 7] }],
         image: 'shop/img/kit/k2_main1.jpg', images: ['shop/img/kit/k2_main1.jpg'] }];
       return { products: data || [], variants, settings, kits };
     },
