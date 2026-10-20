@@ -168,7 +168,7 @@ function demoApi() {
       const data = await (await fetch('demo_products.json', { cache: 'no-store' })).json();
       variants = variants || await (await fetch('demo_variants.json', { cache: 'no-store' })).json();
       const kp = (data || []).some(p => p.id === 13) ? 13 : 2;
-      const kits = [{ id: 1, name: '출고 필수 3종 패키지', subtitle: '차 받는 날 바로 쓰는 필름 · 키케이스 · 폰 거치대', discount_rate: 10,
+      const kits = [{ id: 1, name: '출고 선물 패키지', subtitle: '차 받는 날 바로 쓰는 필름 · 키케이스 · 폰 거치대', discount_rate: 10,
         features: ['낱개로 사는 것보다 10% 더 할인', '칸마다 옵션을 골라 한 번에 담기', '출고 선물·인도 서비스용으로 추천'],
         slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }],
         image: 'shop/img/kit/k1_main1.jpg', images: ['shop/img/kit/k1_main1.jpg'] }];
