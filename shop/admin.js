@@ -261,6 +261,7 @@ function orderDetail(o) {
     <div>
       <table>${items.map(i => `<tr><td>${esc(i.product_name)} <span class="mut">· ${esc(i.option_name)} · ${esc(i.sku || '')}</span></td><td class="n">${i.discount_rate ? `<span style="color:var(--acc)">${i.discount_rate}%↓</span> ` : ''}${won(i.unit_price)} × ${i.qty}</td><td class="n">${won(i.line_total)}원</td></tr>`).join('')}
         <tr><td class="mut">배송비</td><td></td><td class="n">${o.shipping_fee ? won(o.shipping_fee) + '원' : '무료'}</td></tr>
+        ${o.kit_discount ? `<tr><td class="mut">패키지 할인 · ${esc((o.kits || []).map(k => `${k.name} ×${k.qty}`).join(', '))}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.kit_discount)}원</td></tr>` : ''}
         ${o.coupon_discount ? `<tr><td class="mut">쿠폰 · ${esc(o.coupon_name || '')}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.coupon_discount)}원</td></tr>` : ''}
         ${o.points_used ? `<tr><td class="mut">포인트 사용</td><td></td><td class="n" style="color:var(--acc)">−${won(o.points_used)}원</td></tr>` : ''}
         <tr><td><b>합계</b></td><td></td><td class="n"><b>${won(o.total)}원</b></td></tr></table>
@@ -344,13 +345,14 @@ function bindDetail() {
 }
 
 function downloadCSV(list) {
-  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일', '쿠폰', '쿠폰할인', '포인트사용', '결제수단'];
+  const head = ['주문일시', '주문번호', '상태', '딜러사', '지점', '담당자', '딜러연락처', '상품', '옵션', 'SKU', '단가', '수량', '금액', '배송비', '주문총액', '입금자', '받는분', '받는분연락처', '배송지', '요청사항', '택배사', '송장번호', '입금확인일시', '출고일시', '배송완료일시', '관리자메모', '주문자', '주문자연락처', '세금계산서', '사업자번호', '계산서이메일', '쿠폰', '쿠폰할인', '포인트사용', '결제수단', '패키지할인', '패키지'];
   const rows = [];
   for (const o of list) for (const [k, i] of (o.order_items || []).entries()) {
     const d = o.dealers || {};
     rows.push([fmtDT(o.created_at), o.order_no, STATUS[o.status], d.company, d.branch, d.manager_name, d.phone, i.product_name, i.option_name, i.sku, i.unit_price, i.qty, i.line_total,
       k === 0 ? o.shipping_fee : '', k === 0 ? o.total : '', o.depositor_name, o.ship_name, o.ship_phone, o.ship_address, o.memo, o.carrier, o.tracking_no, fmtDT(o.paid_at), fmtDT(o.shipped_at), fmtDT(o.delivered_at), o.admin_memo,
-      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email, k === 0 ? o.coupon_name : '', k === 0 ? o.coupon_discount || '' : '', k === 0 ? o.points_used || '' : '', o.pay_method === 'card' ? (o.pay_info?.cancelledAt ? '카드(환불)' : o.payment_key ? '카드' : '카드(미결제)') : '무통장']);
+      o.orderer_name, o.orderer_phone, o.tax_invoice ? (o.tax_issued ? '발행완료' : '요청') : '', o.tax_biz_no, o.tax_email, k === 0 ? o.coupon_name : '', k === 0 ? o.coupon_discount || '' : '', k === 0 ? o.points_used || '' : '', o.pay_method === 'card' ? (o.pay_info?.cancelledAt ? '카드(환불)' : o.payment_key ? '카드' : '카드(미결제)') : '무통장',
+      k === 0 ? o.kit_discount || '' : '', k === 0 ? (o.kits || []).map(x => `${x.name}×${x.qty}`).join(', ') : '']);
   }
   const csv = [head, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
@@ -927,7 +929,7 @@ async function viewActivity(force) {
   const prod = id => A.products.find(p => p.id === id);
   const vari = id => A.variants.find(v => v.id === id);
   const ago = t => { const m = Math.round((Date.now() - new Date(t)) / 6e4); return m < 60 ? `${Math.max(m, 1)}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
-  const cartLines = c => (c?.items || []).map(it => { const v = vari(it.variant_id), p = v && prod(v.product_id); return v && p ? { p, v, qty: it.qty, amt: v.price * it.qty } : null; }).filter(Boolean);
+  const cartLines = c => (c?.items || []).flatMap(it => it.kit_id ? (it.picks || []).map(id => ({ variant_id: id, qty: it.qty })) : [it]).map(it => { const v = vari(it.variant_id), p = v && prod(v.product_id); return v && p ? { p, v, qty: it.qty, amt: v.price * it.qty } : null; }).filter(Boolean);
   const carts = A.act.carts.filter(c => cartLines(c).length);
   const restock = A.act.restock || [];
   const dealer = id => A.dealers.find(d => d.id === id);

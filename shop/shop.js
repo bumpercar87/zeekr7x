@@ -9,13 +9,14 @@ const api = DEMO ? demoApi() : {
     if (error) throw error; return data;
   },
   async catalog() {
-    const [p, v, s] = await Promise.all([
+    const [p, v, s, k] = await Promise.all([
       sb.from('products').select('*').eq('active', true).order('sort'),
       sb.from('variants').select('*').eq('active', true).order('product_id').order('sort'),
       sb.from('shop_settings').select('*').eq('id', 1).maybeSingle(),
+      sb.from('kits').select('*').eq('active', true).order('sort').order('id'),
     ]);
     for (const r of [p, v, s]) if (r.error) throw r.error;
-    return { products: p.data, variants: v.data, settings: s.data || {} };
+    return { products: p.data, variants: v.data, settings: s.data || {}, kits: k.error ? [] : k.data || [] };
   },
   async stock() {
     const { data, error } = await sb.from('variants').select('id,stock,active,price');
@@ -166,7 +167,12 @@ function demoApi() {
     async catalog() {
       const data = await (await fetch('demo_products.json', { cache: 'no-store' })).json();
       variants = variants || await (await fetch('demo_variants.json', { cache: 'no-store' })).json();
-      return { products: data || [], variants, settings };
+      const kp = (data || []).some(p => p.id === 13) ? 13 : 2;
+      const kits = [{ id: 1, name: '출고 필수 3종 패키지', subtitle: '차 받는 날 바로 쓰는 필름 · 키케이스 · 폰 거치대', discount_rate: 10,
+        features: ['낱개로 사는 것보다 10% 더 할인', '칸마다 옵션을 골라 한 번에 담기', '출고 선물·인도 서비스용으로 추천'],
+        slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }],
+        image: 'shop/img/kit/k1_main1.jpg', images: ['shop/img/kit/k1_main1.jpg'] }];
+      return { products: data || [], variants, settings, kits };
     },
     async stock() { return variants; },
     async placeOrderCard(a) {
@@ -236,8 +242,15 @@ function demoApi() {
       return { balance: l.reduce((a, x) => a + x.amount, 0), list: [...l].reverse() };
     },
     async placeOrderPoints(a) {
-      const r = await this.placeOrder(a), pts = a.p_points || 0;
+      const kits = a.p_kits || [];
+      const r = await this.placeOrder({ ...a, p_items: [...a.p_items, ...kits.flatMap(k => k.picks.map(id => ({ variant_id: id, qty: k.qty })))] }), pts = a.p_points || 0;
       const o = orders.find(x => x.order_no === r.order_no);
+      if (kits.length) {
+        let kd = 0;
+        o.kits = kits.map(k => { const kk = kit(k.kit_id), its = k.picks.map(id => o.order_items.find(i => i.variant_id === id)), us = its.reduce((x, i) => x + i.unit_price, 0), pr = kitPrice(us, kk);
+          kd += (us - pr) * k.qty; return { kit_id: k.kit_id, name: kk.name, qty: k.qty, unit_sum: us, price: pr, picks: its.map(i => ({ variant_id: i.variant_id, product_name: i.product_name, option_name: i.option_name })) }; });
+        o.kit_discount = Math.min(kd, o.total); o.total -= o.kit_discount;
+      }
       Object.assign(o, { points_used: pts, total: o.total - pts });
       if (pts && !o.total) Object.assign(o, { status: 'paid', paid_at: new Date().toISOString(), depositor_name: '포인트 결제' });
       store('zk_demo_orders', orders);
@@ -283,6 +296,33 @@ async function syncCart() {
     else if (local.length || srv) await api.saveCart(local);
   } catch (e) { /* 장바구니는 이 기기 것으로 계속 사용 */ }
 }
+// 패키지: 칸마다 고른 옵션(picks) · 가격 = 구성품 합계 × (100−할인율)% → 천 원 단위 내림
+const kit = id => (S.kits || []).find(k => k.id === id);
+const kitPrice = (sum, k) => Math.floor(sum * (100 - (k?.discount_rate ?? 10)) / 100 / 1000) * 1000;
+const kitSlotVs = s => S.variants.filter(v => v.product_id === s.product_id);
+function addKitToCart(kit_id, picks, qty) {
+  const c = getCart(), line = c.find(x => x.kit_id === kit_id && (x.picks || []).join() === picks.join());
+  if (line) line.qty += qty; else c.push({ kit_id, picks, qty });
+  setCart(c);
+}
+// 장바구니 계산 (cartTotal · viewCart 공용): 패키지 구성품도 수량 할인·재고 계산에 포함
+function cartCalc(cart) {
+  const need = {}, pq = {};
+  const add = (v, q) => { need[v.id] = (need[v.id] || 0) + q; pq[v.product_id] = (pq[v.product_id] || 0) + q; };
+  cart.forEach(c => (c.kit_id ? (c.picks || []).map(variant) : [variant(c.variant_id)]).forEach(v => v && add(v, c.qty)));
+  const unit = v => unitPrice(v.price, rateFor(pq[v.product_id], S.settings));
+  let sub = 0, listSub = 0, kdisc = 0;
+  cart.forEach(c => {
+    if (c.kit_id) {
+      const k = kit(c.kit_id), vs = (c.picks || []).map(variant);
+      if (!k || !vs.length || vs.some(v => !v)) return;
+      const us = vs.reduce((a, v) => a + unit(v), 0);
+      sub += us * c.qty; listSub += vs.reduce((a, v) => a + v.price, 0) * c.qty; kdisc += (us - kitPrice(us, k)) * c.qty;
+    } else { const v = variant(c.variant_id); if (v) { sub += unit(v) * c.qty; listSub += v.price * c.qty; } }
+  });
+  return { need, pq, unit, sub, listSub, kdisc };
+}
+const cartNeed = vid => cartCalc(getCart()).need[vid] || 0;
 function addToCart(variant_id, qty) {
   const c = getCart(), line = c.find(x => x.variant_id === variant_id);
   if (line) line.qty += qty; else c.push({ variant_id, qty });
@@ -314,7 +354,7 @@ function renderNav() {
   const r = location.hash || '#/';
   const on = h => {
     if (h === '#/') return r === '#/' || r === '#' || r === '';
-    if (h === '#/products') return r.startsWith('#/products') || r.startsWith('#/p/');
+    if (h === '#/products') return r.startsWith('#/products') || r.startsWith('#/p/') || r.startsWith('#/kit/');
     return r.startsWith(h);
   };
   const c = h => on(h) ? 'on' : '';
@@ -715,6 +755,7 @@ function viewHome() {
     <div class="hero-dots">${bs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
   </div>` : ''}
   ${info.length ? `<div class="home-info">${info.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
+  ${kitsSection()}
   <div class="sec-h big tagged all-h"><div><h2>전체 상품 <em>${sellable.length}</em></h2><p>지커 7X 전용 액세서리 · 옵션 여러 개를 함께 담을 수 있어요</p></div></div>
   <div class="home-cats">${['전체', ...cats].map(c => `<button type="button" class="${c === hc ? 'on' : ''}" data-hcat="${esc(c)}">${esc(c)} ${c === '전체' ? sellable.length : sellable.filter(p => p.category === c).length}</button>`).join('')}</div>
   <div class="grid home-grid">${shown.map(productCard).join('')}</div>`;
@@ -779,7 +820,7 @@ function reorder(orderId) {
   let added = 0, skipped = [];
   for (const it of o.order_items || []) {
     const v = it.variant_id && variant(it.variant_id);
-    const inCart = v ? (getCart().find(x => x.variant_id === v.id)?.qty || 0) : 0;
+    const inCart = v ? cartNeed(v.id) : 0;
     const q = v ? Math.min(it.qty, v.stock - inCart) : 0;
     if (v && v.active !== false && q > 0) { addToCart(v.id, q); added += q; if (q < it.qty) skipped.push(`${it.option_name}(${it.qty - q}개 부족)`); }
     else skipped.push(`${it.product_name} ${it.option_name}`);
@@ -865,9 +906,9 @@ function viewProduct(id) {
   </section>` : ''}
   <div class="mbar" id="mbar"><div class="mt" id="mtotal"></div><button class="btn" id="madd">담기</button><button class="btn pri" id="mbuy">바로 주문</button></div>`;
 
-  const inCart = v => getCart().find(x => x.variant_id === v.id)?.qty || 0;
+  const inCart = v => cartNeed(v.id);
   const avail = v => Math.max(0, v.stock - inCart(v));
-  const cartQtyOfProduct = () => getCart().reduce((a, c) => { const v = variant(c.variant_id); return a + (v && v.product_id === p.id ? c.qty : 0); }, 0);
+  const cartQtyOfProduct = () => cartCalc(getCart()).pq[p.id] || 0;
   const render = () => {
     const pq = picks.reduce((a, x) => a + x.qty, 0) + cartQtyOfProduct();
     const rate = rateFor(pq, S.settings);
@@ -947,6 +988,139 @@ function viewProduct(id) {
   render();
 }
 
+// ---------------------------------------------------------------- 패키지
+// 패키지 칸 정보: 상품 · 옵션(순서대로) · 칸 최저가
+function kitInfo(k) {
+  const slots = (k.slots || []).map(sl => {
+    const p = product(sl.product_id), vs = kitSlotVs(sl);
+    return { ...sl, p, vs, min: vs.length ? Math.min(...vs.map(v => v.price)) : 0 };
+  });
+  const ok = slots.length && slots.every(x => x.p && x.vs.length);
+  const minSum = slots.reduce((a, x) => a + x.min, 0);
+  const maxSum = slots.reduce((a, x) => a + (x.vs.length ? Math.max(...x.vs.map(v => v.price)) : 0), 0);
+  const inStock = ok && slots.every(x => x.vs.some(v => v.stock > 0));
+  return { slots, ok, minSum, maxSum, inStock };
+}
+
+function kitsSection() {
+  if (S.guest || !(S.kits || []).length) return '';
+  const cards = S.kits.map(k => {
+    const I = kitInfo(k);
+    if (!I.ok) return '';
+    return `
+    <a class="kit-card" href="#/kit/${k.id}">
+      <div class="kc-ph"><img src="${thumb(k.image)}" alt="" loading="lazy">${I.inStock ? '' : '<span class="soldout">품절</span>'}</div>
+      <div class="kc-bd">
+        <span class="kit-tag">패키지 · ${k.slots.length}종</span>
+        <h3>${esc(k.name)}</h3>
+        <p>${esc(k.subtitle || '')}</p>
+        <ol>${I.slots.map(x => `<li>${esc(x.label)}</li>`).join('')}</ol>
+        <div class="kc-price"><s>${won(I.minSum)}원</s><b>${won(kitPrice(I.minSum, k))}원${I.maxSum > I.minSum ? '~' : ''}</b><em>낱개보다 ${k.discount_rate}% 할인</em></div>
+      </div>
+    </a>`;
+  }).join('');
+  return cards.trim() ? `<div class="sec-h big tagged"><div><h2>출고 패키지</h2><p>딜러 출고 선물로 많이 찾는 구성 · 칸마다 옵션을 골라 한 번에 담아요</p></div></div><div class="kit-row">${cards}</div>` : '';
+}
+
+function viewKit(id) {
+  const k = kit(+id);
+  if (!k) return viewHome();
+  const I = kitInfo(k);
+  if (!I.ok) { app().innerHTML = `<a class="back" href="#/products">← 상품 목록</a><div class="empty">이 패키지는 지금 준비 중이에요.</div>`; return; }
+  S.kitSel = S.kitSel || {};
+  // 칸마다 기본 옵션: 지난번 고른 것 → 재고 있는 첫 옵션
+  const sel = I.slots.map((x, i) => { const prev = S.kitSel[k.id]?.[i]; return x.vs.find(v => v.id === prev && v.stock) || x.vs.find(v => v.stock) || x.vs[0]; });
+  let qty = 1;
+  const pics = [...new Set([k.image, ...(k.images || []), ...I.slots.map(x => x.p.image)].filter(Boolean))];
+  const avail = () => Math.min(...sel.map(v => Math.max(0, v.stock - cartNeed(v.id))));
+
+  app().innerHTML = `
+  <a class="back" href="#/products">← 상품 목록</a>
+  <div class="pd">
+    <div class="gal">
+      <div class="main">
+        <div class="slides" id="slides">${pics.map((src, i) => `<img src="${img(src)}" alt="" ${i ? 'loading="lazy"' : ''}>`).join('')}</div>
+        ${pics.length > 1 ? `<span class="gcount" id="gcount">1 / ${pics.length}</span>
+        <button class="gnav prev" data-g="-1" aria-label="이전 사진">‹</button><button class="gnav next" data-g="1" aria-label="다음 사진">›</button>` : ''}
+      </div>
+      ${pics.length > 1 ? `<div class="thumbs">${pics.map((src, i) => `<img src="${thumb(src)}" data-i="${i}" class="${i ? '' : 'on'}" alt="" loading="lazy">`).join('')}</div>` : ''}
+    </div>
+    <div>
+      <div class="cat">패키지 <span class="tags"><span class="tagb kit">${k.slots.length}종 구성</span></span></div>
+      <h1>${esc(k.name)}</h1>
+      <p class="sub">${esc(k.subtitle || '')}</p>
+      <div class="price"><span>${won(kitPrice(I.minSum, k))}원${I.maxSum > I.minSum ? '~' : ''}</span></div>
+      <div class="kit-save">낱개 합계 <s>${won(I.minSum)}원</s> → <b>패키지 ${k.discount_rate}% 할인</b> <span class="mut">(천 원 단위 내림)</span></div>
+      ${I.slots.map((x, i) => `
+      <div class="kit-step">
+        <div class="opt-label"><span><b class="ks-n">${i + 1}</b>${esc(x.label)} <a class="ks-more" href="#/p/${x.p.id}">상품 보기 →</a></span></div>
+        <div class="opts ${x.vs.some(v => v.image) ? '' : 'txtonly'}">${x.vs.map(v => `
+          <button class="opt ${v.image ? '' : 'txt'} ${v.stock ? '' : 'out'}" data-s="${i}" data-v="${v.id}">
+            ${v.image ? `<img src="${thumb(v.image)}" alt="">` : ''}
+            <span>${v.image ? esc(v.option_name) : optText(v.option_name)}${v.stock ? '' : '<span class="so">품절</span>'}${v.price > x.min ? `<span class="op">+${won(v.price - x.min)}원</span>` : ''}</span>
+          </button>`).join('')}</div>
+      </div>`).join('')}
+      <div class="kit-sum" id="ksum"></div>
+      <div class="buy">
+        <button class="btn" id="add" style="flex:1">장바구니 담기</button>
+        <button class="btn pri" id="buynow" style="flex:1">바로 주문하기</button>
+      </div>
+      <ul class="feats">${(k.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+      ${S.settings.ship_info ? `<div class="shipinfo"><b>배송 · 교환 안내</b><div>${esc(S.settings.ship_info)}</div></div>` : ''}
+    </div>
+  </div>
+  <section class="detail-sec">
+    <div class="detail-h">구성품 상세정보</div>
+    ${I.slots.map((x, i) => `
+      <div class="kit-dh"><b><i class="ks-n">${i + 1}</i>${esc(x.p.name)}</b><a href="#/p/${x.p.id}">상품 페이지 →</a></div>
+      <div class="detail-imgs">${(x.p.detail_images || []).map(d => `<img src="${img(d)}" alt="" loading="lazy">`).join('') || `<img src="${img(x.p.image)}" alt="" loading="lazy">`}</div>`).join('')}
+  </section>
+  <div class="mbar show" id="mbar"><div class="mt" id="mtotal"></div><button class="btn" id="madd">담기</button><button class="btn pri" id="mbuy">바로 주문</button></div>`;
+
+  const render = () => {
+    S.kitSel[k.id] = sel.map(v => v.id);
+    $$('.opt').forEach(b => b.classList.toggle('on', sel[+b.dataset.s]?.id === +b.dataset.v));
+    const lst = sel.reduce((a, v) => a + v.price, 0), kp = kitPrice(lst, k), out = sel.some(v => !v.stock), hi = avail();
+    $('#ksum').innerHTML = `
+      <div class="ks-list">${sel.map((v, i) => `<div><span>${esc(I.slots[i].label)} · <b>${esc(v.option_name)}</b></span><span class="num">${won(v.price)}원</span></div>`).join('')}</div>
+      <div class="ks-foot">
+        <div class="qty"><button data-kq="-1" aria-label="수량 감소">−</button><input id="kqty" value="${qty}" inputmode="numeric"><button data-kq="1" aria-label="수량 증가">+</button></div>
+        <div class="ks-tot"><s>${won(lst * qty)}원</s><b>${won(kp * qty)}<small>원</small></b></div>
+      </div>
+      ${out ? '<div class="warn">품절된 구성품이 있어요. 다른 옵션을 골라 주세요.</div>' : !hi ? '<div class="warn">이미 재고만큼 장바구니에 담겨 있어요.</div>' : `<div class="small mut">한 번에 최대 ${hi}세트까지 담을 수 있어요 · 수량 할인(같은 상품 30개↑)도 함께 적용돼요</div>`}`;
+    $('#mtotal').innerHTML = `<b class="num">${won(kp * qty)}원</b><small>${qty}세트 · 패키지 할인</small>`;
+    $('#add').disabled = $('#buynow').disabled = $('#madd').disabled = $('#mbuy').disabled = out || !hi;
+    $$('[data-kq]').forEach(b => b.onclick = () => setQ(qty + +b.dataset.kq));
+    $('#kqty').onchange = e => setQ(parseInt(e.target.value) || 1);
+  };
+  const setQ = q => { const hi = Math.max(1, avail()); if (q > hi) toast(`더 담을 수 있는 수량은 ${hi}세트입니다`); qty = Math.max(1, Math.min(q, hi)); render(); };
+  $$('.opt').forEach(b => b.onclick = () => {
+    const v = variant(+b.dataset.v);
+    if (!v.stock) return toast('품절된 옵션입니다');
+    sel[+b.dataset.s] = v;
+    if (v.image && pics.includes(v.image)) goSlide(pics.indexOf(v.image));
+    qty = Math.max(1, Math.min(qty, avail() || 1));
+    render();
+  });
+  const commit = () => { addKitToCart(k.id, sel.map(v => v.id), qty); const n = qty; qty = 1; return n; };
+  $('#add').onclick = $('#madd').onclick = () => { const n = commit(); toast(`패키지 ${n}세트를 장바구니에 담았습니다`); render(); };
+  $('#buynow').onclick = $('#mbuy').onclick = () => { commit(); location.hash = '#/cart'; };
+  // 사진: 스와이프 · 화살표 · 썸네일
+  const sl = $('#slides');
+  let cur = 0;
+  function goSlide(i) { if (i >= 0 && i < pics.length) sl.scrollTo({ left: i * sl.clientWidth, behavior: 'smooth' }); }
+  sl.addEventListener('scroll', () => {
+    const i = Math.round(sl.scrollLeft / sl.clientWidth);
+    if (i === cur) return;
+    cur = i;
+    if ($('#gcount')) $('#gcount').textContent = `${i + 1} / ${pics.length}`;
+    $$('.thumbs img').forEach(x => x.classList.toggle('on', +x.dataset.i === i));
+  }, { passive: true });
+  $$('.thumbs img').forEach(t => t.onclick = () => goSlide(+t.dataset.i));
+  $$('.gnav').forEach(b => b.onclick = () => goSlide((cur + +b.dataset.g + pics.length) % pics.length));
+  render();
+}
+
 // ---------------------------------------------------------------- 쿠폰
 // DB place_order 와 같은 계산: 정액 / 정률(10원 내림, 최대 할인) / 무료배송(=배송비)
 function couponDiscount(c, sub, ship) {
@@ -995,13 +1169,11 @@ function bindCoupon() {
 // ---------------------------------------------------------------- 장바구니 / 주문서
 // 지금 가격·설정 기준 장바구니 총액 (주문 직전 변경 확인용 · viewCart 계산과 동일)
 function cartTotal() {
-  const cart = getCart(), pq = {};
-  cart.forEach(c => { const v = variant(c.variant_id); if (v) pq[v.product_id] = (pq[v.product_id] || 0) + c.qty; });
-  let sub = 0;
-  cart.forEach(c => { const v = variant(c.variant_id); if (v) sub += unitPrice(v.price, rateFor(pq[v.product_id], S.settings)) * c.qty; });
+  const { sub, kdisc } = cartCalc(getCart());
   const ship = shippingFor(sub), c = S.coupon;
   const cp = c && (c.min_order || 0) <= sub && !(c.kind === 'free_ship' && !ship) ? c : null;
-  return sub + ship - (cp ? couponDiscount(cp, sub, ship) : 0);
+  const t = sub + ship - (cp ? couponDiscount(cp, sub, ship) : 0);
+  return t - Math.min(kdisc, t);
 }
 
 function viewCart() {
@@ -1011,19 +1183,36 @@ function viewCart() {
       <div class="empty">장바구니가 비어 있습니다.<br><a class="btn" href="#/products">상품 보러 가기</a></div>`;
     return;
   }
-  let blocked = false, sub = 0, listSub = 0;
-  const pq = {};
-  cart.forEach(c => { const v = variant(c.variant_id); if (v) pq[v.product_id] = (pq[v.product_id] || 0) + c.qty; });
+  let blocked = false;
+  const C = cartCalc(cart), { pq, sub, listSub } = C;
   const quote = [];
+  const stockWarn = vs => { const v = vs.find(v => v && C.need[v.id] > v.stock); return !v ? '' : !v.stock ? `${esc(v.option_name)} 품절 · 삭제 후 주문해 주세요.` : `${esc(product(v.product_id)?.name || '')} ${esc(v.option_name)} 재고가 ${v.stock}개 남았습니다. 수량을 줄여 주세요.`; };
   const lines = cart.map((c, i) => {
+    if (c.kit_id) {   // 패키지 줄
+      const k = kit(c.kit_id), vs = (c.picks || []).map(variant);
+      if (!k || !vs.length || vs.some(v => !v)) { blocked = true; return `<div class="line"><div></div><div><h4>판매 종료된 패키지</h4><div class="warn">삭제 후 주문해 주세요.</div></div><div class="r"><button class="rm" data-rm="${i}">삭제</button></div></div>`; }
+      const warn = stockWarn(vs); if (warn) blocked = true;
+      const us = vs.reduce((a, v) => a + C.unit(v), 0), kp = kitPrice(us, k);
+      vs.forEach(v => { const r = rateFor(pq[v.product_id], S.settings); quote.push({ product_name: product(v.product_id).name, option_name: v.option_name, unit_price: C.unit(v), discount_rate: r, qty: c.qty, line_total: C.unit(v) * c.qty }); });
+      return `
+    <div class="line kit-line">
+      <a href="#/kit/${k.id}"><img src="${thumb(k.image)}" alt=""></a>
+      <div><h4><span class="kit-tag">패키지</span>${esc(k.name)}</h4>
+        <div class="o">${vs.map(v => `${esc(product(v.product_id).name)} · <b>${esc(v.option_name)}</b>`).join('<br>')}</div>
+        <div class="p"><s class="mut">${won(us * c.qty)}</s> ${won(kp * c.qty)}원</div>${warn ? `<div class="warn">${warn}</div>` : ''}</div>
+      <div class="r">
+        <div class="qty"><button data-q="${i}" data-d="-1">−</button><input value="${c.qty}" data-qi="${i}" inputmode="numeric"><button data-q="${i}" data-d="1">+</button></div>
+        <button class="rm" data-rm="${i}">삭제</button>
+      </div>
+    </div>`;
+    }
     const v = variant(c.variant_id), p = v && product(v.product_id);
     if (!v || !p) { blocked = true; return `<div class="line"><div></div><div><h4>판매 종료된 상품</h4><div class="warn">삭제 후 주문해 주세요.</div></div><div class="r"><button class="rm" data-rm="${i}">삭제</button></div></div>`; }
     let warn = '';
     if (!v.stock) { warn = '품절되었습니다. 삭제 후 주문해 주세요.'; blocked = true; }
-    else if (c.qty > v.stock) { warn = `재고가 ${v.stock}개 남았습니다. 수량을 줄여 주세요.`; blocked = true; }
+    else if (C.need[v.id] > v.stock) { warn = `재고가 ${v.stock}개 남았습니다${C.need[v.id] > c.qty ? ' (패키지에 담긴 수량 포함)' : ''}. 수량을 줄여 주세요.`; blocked = true; }
     else if (c.qty < (v.min_qty || 1)) { warn = `최소 주문수량은 ${v.min_qty}개입니다.`; blocked = true; }
     const rate = rateFor(pq[p.id], S.settings), u = unitPrice(v.price, rate);
-    sub += u * c.qty; listSub += v.price * c.qty;
     quote.push({ product_name: p.name, option_name: v.option_name, unit_price: u, discount_rate: rate, qty: c.qty, line_total: u * c.qty });
     return `
     <div class="line">
@@ -1043,6 +1232,8 @@ function viewCart() {
   // 주문 일시 중지 (관리자 설정) — 장바구니·견적서는 그대로, 관리자 계정은 테스트용으로 주문 가능
   const closed = st.orders_open === false && !d.is_admin;
   const cdisc = cp ? couponDiscount(cp, sub, ship) : 0;
+  const kdisc = Math.min(C.kdisc, sub + ship - cdisc);
+  const hasKit = cart.some(c => c.kit_id);
   if (S.points === undefined) { S.points = null; api.myPoints().then(x => { S.points = x; if (location.hash === '#/cart') viewCart(); }).catch(() => { S.points = { balance: 0, list: [] }; }); }
   // 입력하던 주문서 내용 유지 (수량을 바꿔 화면을 다시 그려도 지워지지 않게)
   const D = S.draft = S.draft || {
@@ -1052,13 +1243,13 @@ function viewCart() {
     depositor: d.manager_name || d.company, memo: '', tax: false, tax_biz_no: d.biz_no || '', tax_email: d.email, save_addr: false,
   };
   const store = D.dest === 'store';
-  if (D.tax || !CARD_ON()) D.pay = 'bank';
+  if (D.tax || !CARD_ON() || hasKit) D.pay = 'bank';   // 패키지는 무통장 주문만
   const card = D.pay === 'card';
   // 포인트: 보유 잔액과 결제 금액 안에서만 (카드 결제는 포인트 미사용)
   const ptBal = S.points?.balance || 0;
-  const ptMax = Math.max(0, Math.min(ptBal, sub + ship - cdisc));
+  const ptMax = Math.max(0, Math.min(ptBal, sub + ship - cdisc - kdisc));
   const pts = card ? 0 : Math.min(Math.max(0, D.points || 0), ptMax);
-  const pay = sub + ship - cdisc - pts;
+  const pay = sub + ship - cdisc - kdisc - pts;
 
   app().innerHTML = `
   <div class="page-head"><div><div class="eyebrow">Cart · Checkout</div><h1>장바구니 · 주문서</h1></div></div>
@@ -1112,6 +1303,7 @@ function viewCart() {
       <h2>결제 금액</h2>
       <div class="row"><span>상품 금액</span><b>${won(listSub)}원</b></div>
       ${listSub > sub ? `<div class="row disc-row"><span>수량 할인</span><b>−${won(listSub - sub)}원</b></div>` : ''}
+      ${kdisc ? `<div class="row disc-row"><span>패키지 할인</span><b>−${won(kdisc)}원</b></div>` : ''}
       <div class="row"><span>배송비</span><b>${ship ? won(ship) + '원' : '무료'}</b></div>
       ${need > 0 ? `<div class="free">${won(need)}원 더 담으면 무료배송</div>` : ''}
       ${couponBox(sub, ship)}
@@ -1133,7 +1325,7 @@ function viewCart() {
   $('#quote').onclick = () => printDoc({
     kind: '견 적 서', no: '', date: `견적일 ${fmtDT(new Date()).slice(0, 10)} · 유효기간 7일`,
     to: { company: `${d.company}${d.branch ? ' ' + d.branch : ''}`, manager: d.manager_name, phone: d.phone, biz_no: d.biz_no },
-    items: quote, shipping: ship, total: pay, biz: S.info, coupon: cp ? { name: cp.name, discount: cdisc } : null, points: pts,
+    items: quote, shipping: ship, total: pay, biz: S.info, coupon: cp ? { name: cp.name, discount: cdisc } : null, points: pts, kit: kdisc,
     note: `· 표시 금액은 부가세 포함 금액입니다.\n· 결제: 무통장 입금 (주문 후 ${st.pay_deadline_days || 3}일 이내)\n· 재고 상황에 따라 수량이 변동될 수 있습니다.`,
   });
 
@@ -1187,12 +1379,12 @@ function viewCart() {
     await refreshStock();
     try { S.settings = (await api.catalog()).settings || S.settings; } catch (e) { /* 그대로 진행 */ }
     btn.disabled = false;
-    if (cartTotal() !== sub + ship - cdisc) { viewCart(); toast('가격·배송비가 변경되어 다시 계산했어요. 금액을 확인하고 다시 주문해 주세요.', 4000); return; }
+    if (cartTotal() !== sub + ship - cdisc - kdisc) { viewCart(); toast('가격·배송비가 변경되어 다시 계산했어요. 금액을 확인하고 다시 주문해 주세요.', 4000); return; }
     if (!await ask(card ? `총 ${won(pay)}원을 카드로 결제할까요?\n배송: ${dest} (${t(f.ship_name.value)})\n결제창에서 30분 안에 결제하지 않으면 주문이 자동 취소돼요.` : `총 ${won(pay)}원을 주문하시겠습니까?${pts ? `\n(포인트 ${won(pts)}P 사용)` : ''}\n배송: ${dest} (${t(f.ship_name.value)})`, { ok: card ? '결제하기' : '주문하기' })) return;
     btn.disabled = true; btn.textContent = '주문 처리 중…'; err.textContent = '';
     try {
       const common = {
-        p_items: getCart().map(c => ({ variant_id: c.variant_id, qty: c.qty })),
+        p_items: getCart().filter(c => !c.kit_id).map(c => ({ variant_id: c.variant_id, qty: c.qty })),
         p_ship_name: t(f.ship_name.value), p_ship_phone: t(f.ship_phone.value),
         p_ship_address: addr, p_memo: [store ? '' : '[다른 주소 배송]', t(D.memo)].filter(Boolean).join(' ') || null,
         p_orderer_name: t(D.orderer_name), p_orderer_phone: t(D.orderer_phone),
@@ -1201,7 +1393,8 @@ function viewCart() {
       };
       const bankArgs = { ...common, p_depositor: t(D.depositor),
         p_tax_invoice: !!D.tax, p_tax_biz_no: D.tax ? t(D.tax_biz_no) : null, p_tax_email: D.tax ? t(D.tax_email) : null };
-      const r = card ? await api.placeOrderCard(common) : await api.placeOrderPoints({ ...bankArgs, p_points: pts });
+      const p_kits = getCart().filter(c => c.kit_id).map(c => ({ kit_id: c.kit_id, picks: c.picks, qty: c.qty }));
+      const r = card ? await api.placeOrderCard(common) : await api.placeOrderPoints({ ...bankArgs, p_points: pts, ...(p_kits.length ? { p_kits } : {}) });
       // 기본 배송지 저장 / 비어 있던 사업자번호 채우기
       const patch = {};
       if (store && D.save_addr && addr !== S.dealer.address) patch.address = addr;
@@ -1382,6 +1575,7 @@ function bankBox(o) {
 
 const itemsTable = o => `<table class="itbl">${(o.order_items || []).map(it => `<tr><td>${esc(it.product_name)} <span class="mut">· ${esc(it.option_name)}</span></td><td class="n">${it.discount_rate ? `<em class="disc">${it.discount_rate}%</em> ` : ''}${won(it.unit_price)} × ${it.qty}</td><td class="n">${won(it.line_total)}원</td></tr>`).join('')}
   <tr><td class="mut">배송비</td><td></td><td class="n">${o.shipping_fee ? won(o.shipping_fee) + '원' : '무료'}</td></tr>
+  ${o.kit_discount ? `<tr><td class="mut">패키지 할인 · ${esc((o.kits || []).map(k => `${k.name} ×${k.qty}`).join(', '))}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.kit_discount)}원</td></tr>` : ''}
   ${o.coupon_discount ? `<tr><td class="mut">쿠폰 · ${esc(o.coupon_name || '')}</td><td></td><td class="n" style="color:var(--acc)">−${won(o.coupon_discount)}원</td></tr>` : ''}
   ${o.points_used ? `<tr><td class="mut">포인트 사용</td><td></td><td class="n" style="color:var(--acc)">−${won(o.points_used)}원</td></tr>` : ''}
   <tr class="tt"><td>합계</td><td></td><td class="n">${won(o.total)}원</td></tr></table>`;
@@ -1392,7 +1586,7 @@ function printStatement(o, kind = '거 래 명 세 서') {
     kind, no: o.order_no, date: `주문일 ${fmtDT(o.created_at).slice(0, 10)}`,
     to: { company: `${d.company}${d.branch ? ' ' + d.branch : ''}`, manager: o.orderer_name || d.manager_name, phone: o.orderer_phone || d.phone, biz_no: o.tax_biz_no || d.biz_no },
     items: o.order_items || [], shipping: o.shipping_fee, total: o.total, biz: S.info,
-    coupon: o.coupon_discount ? { name: o.coupon_name, discount: o.coupon_discount } : null, points: o.points_used || 0,
+    coupon: o.coupon_discount ? { name: o.coupon_name, discount: o.coupon_discount } : null, points: o.points_used || 0, kit: o.kit_discount || 0,
     note: `· 표시 금액은 부가세 포함 금액입니다.\n· 받는 분: ${o.ship_name} (${o.ship_phone}) ${o.ship_address}`,
   });
 }
@@ -1587,6 +1781,7 @@ async function route() {
   const [h, qs] = full.split('?');
   try {
     if (h.startsWith('/p/')) viewProduct(h.slice(3));
+    else if (h.startsWith('/kit/')) viewKit(h.slice(5));
     else if (h === '/products') viewHome();
     else if (h === '/cart') viewCart();
     else if (h === '/orders') await viewOrders();
