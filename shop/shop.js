@@ -1019,7 +1019,7 @@ function kitsSection() {
         <span class="kit-tag">패키지 · ${k.slots.length}종</span>
         <h3>${esc(k.name)}</h3>
         <p>${esc(k.subtitle || '')}</p>
-        <ol>${I.slots.map(x => `<li>${esc(x.ps.length > 1 ? x.ps.map(pp => pp.name.replace(/^(논슬립 |센터 콘솔 )/, '')).join(' · ') + ' 중 택1' : x.label)}</li>`).join('')}</ol>
+        <ol>${I.slots.map(x => `<li>${x.ps.length > 1 ? `${esc(x.label.replace(/\s*\(.*\)$/, ''))} <em class="kc-pick">택1</em>` : esc(x.label)}</li>`).join('')}</ol>
         <div class="kc-price"><s>${won(I.minSum)}원</s><b>${won(kitPrice(I.minSum, k))}원${I.maxSum > I.minSum ? '~' : ''}</b><em>낱개보다 ${k.discount_rate}% 할인</em></div>
       </div>
     </a>`;

@@ -870,3 +870,13 @@ ul.inq-guide b{color:var(--ink)}
 .kit-det .detail-imgs{padding-bottom:10px}
 .kd-more{display:block;text-align:center;padding:14px 0 22px;font-size:14px;color:var(--mut)}
 @media (max-width:640px){.kit-det summary{font-size:15px;padding:15px 2px}}
+
+/* 패키지 카드: 높이 맞추고 가격 줄은 맨 아래 같은 위치 */
+.kit-row{align-items:stretch}
+.kit-card{align-items:start}
+.kc-bd{display:flex;flex-direction:column;align-self:stretch;min-height:200px}
+.kc-bd ol{margin-bottom:14px}
+.kc-bd .kit-tag{align-self:flex-start}
+.kc-pick{font-style:normal;font-size:11.5px;font-weight:700;color:#fff;background:var(--acc);padding:1px 6px;margin-left:4px;vertical-align:1px}
+.kc-price{margin-top:auto;padding-top:12px;border-top:1px solid var(--hair)}
+@media (max-width:640px){.kc-bd{min-height:110px}.kc-price{padding-top:8px}}
