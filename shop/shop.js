@@ -171,7 +171,11 @@ function demoApi() {
       const kits = [{ id: 1, name: '출고 선물 패키지', subtitle: '차 받는 날 바로 쓰는 필름 · 키케이스 · 폰 거치대', discount_rate: 10,
         features: ['낱개로 사는 것보다 10% 더 할인', '칸마다 옵션을 골라 한 번에 담기', '출고 선물·인도 서비스용으로 추천'],
         slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }],
-        image: 'shop/img/kit/k1_main1.jpg', images: ['shop/img/kit/k1_main1.jpg'] }];
+        image: 'shop/img/kit/k1_main1.jpg', images: ['shop/img/kit/k1_main1.jpg'] },
+        { id: 2, name: '출고 선물 패키지 플러스', subtitle: '출고 선물 3종 + 운전석 실리콘 아이템 1종 골라 담기', discount_rate: 12,
+        features: ['낱개로 사는 것보다 12% 더 할인', '무선충전 패드 · 컵홀더 · 암레스트 수납함 중 1종 선택', '출고 선물·인도 서비스용으로 추천'],
+        slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }, { label: '운전석 실리콘 아이템 (1종 선택)', product_ids: [5, 11, 7] }],
+        image: 'shop/img/kit/k2_main1.jpg', images: ['shop/img/kit/k2_main1.jpg'] }];
       return { products: data || [], variants, settings, kits };
     },
     async stock() { return variants; },
@@ -299,7 +303,8 @@ async function syncCart() {
 // 패키지: 칸마다 고른 옵션(picks) · 가격 = 구성품 합계 × (100−할인율)% → 천 원 단위 내림
 const kit = id => (S.kits || []).find(k => k.id === id);
 const kitPrice = (sum, k) => Math.floor(sum * (100 - (k?.discount_rate ?? 10)) / 100 / 1000) * 1000;
-const kitSlotVs = s => S.variants.filter(v => v.product_id === s.product_id);
+const slotPids = sl => sl.product_ids || [sl.product_id];   // 칸 하나에 상품 하나, 또는 여러 상품 중 택1
+const kitSlotVs = sl => S.variants.filter(v => slotPids(sl).includes(v.product_id));
 function addKitToCart(kit_id, picks, qty) {
   const c = getCart(), line = c.find(x => x.kit_id === kit_id && (x.picks || []).join() === picks.join());
   if (line) line.qty += qty; else c.push({ kit_id, picks, qty });
@@ -992,10 +997,10 @@ function viewProduct(id) {
 // 패키지 칸 정보: 상품 · 옵션(순서대로) · 칸 최저가
 function kitInfo(k) {
   const slots = (k.slots || []).map(sl => {
-    const p = product(sl.product_id), vs = kitSlotVs(sl);
-    return { ...sl, p, vs, min: vs.length ? Math.min(...vs.map(v => v.price)) : 0 };
+    const ps = slotPids(sl).map(product).filter(Boolean), vs = kitSlotVs(sl);
+    return { ...sl, p: ps[0], ps, vs, min: vs.length ? Math.min(...vs.map(v => v.price)) : 0 };
   });
-  const ok = slots.length && slots.every(x => x.p && x.vs.length);
+  const ok = slots.length && slots.every(x => x.ps.length && x.vs.length);
   const minSum = slots.reduce((a, x) => a + x.min, 0);
   const maxSum = slots.reduce((a, x) => a + (x.vs.length ? Math.max(...x.vs.map(v => v.price)) : 0), 0);
   const inStock = ok && slots.every(x => x.vs.some(v => v.stock > 0));
@@ -1014,7 +1019,7 @@ function kitsSection() {
         <span class="kit-tag">패키지 · ${k.slots.length}종</span>
         <h3>${esc(k.name)}</h3>
         <p>${esc(k.subtitle || '')}</p>
-        <ol>${I.slots.map(x => `<li>${esc(x.label)}</li>`).join('')}</ol>
+        <ol>${I.slots.map(x => `<li>${esc(x.ps.length > 1 ? x.ps.map(pp => pp.name.replace(/^(논슬립 |센터 콘솔 )/, '')).join(' · ') + ' 중 택1' : x.label)}</li>`).join('')}</ol>
         <div class="kc-price"><s>${won(I.minSum)}원</s><b>${won(kitPrice(I.minSum, k))}원${I.maxSum > I.minSum ? '~' : ''}</b><em>낱개보다 ${k.discount_rate}% 할인</em></div>
       </div>
     </a>`;
@@ -1030,7 +1035,7 @@ function viewKit(id) {
   S.kitSel = S.kitSel || {};
   // 칸마다 기본 옵션: 지난번 고른 것 → 재고 있는 첫 옵션
   const sel = I.slots.map((x, i) => { const prev = S.kitSel[k.id]?.[i]; return x.vs.find(v => v.id === prev && v.stock) || x.vs.find(v => v.stock) || x.vs[0]; });
-  let qty = 1;
+  let qty = S.kitQty?.[k.id] || 1;
   const pics = [...new Set([k.image, ...(k.images || []), ...I.slots.map(x => x.p.image)].filter(Boolean))];
   const avail = () => Math.min(...sel.map(v => Math.max(0, v.stock - cartNeed(v.id))));
 
@@ -1050,11 +1055,12 @@ function viewKit(id) {
       <h1>${esc(k.name)}</h1>
       <p class="sub">${esc(k.subtitle || '')}</p>
       <div class="price"><span>${won(kitPrice(I.minSum, k))}원${I.maxSum > I.minSum ? '~' : ''}</span></div>
-      <div class="kit-save">낱개 합계 <s>${won(I.minSum)}원</s> → <b>패키지 ${k.discount_rate}% 할인</b> <span class="mut">(천 원 단위 내림)</span></div>
+      <div class="kit-save">낱개 합계 <s>${won(I.minSum)}원</s> → <b>패키지 ${k.discount_rate}% 할인</b></div>
       ${I.slots.map((x, i) => `
       <div class="kit-step">
-        <div class="opt-label"><span><b class="ks-n">${i + 1}</b>${esc(x.label)} <a class="ks-more" href="#/p/${x.p.id}">상품 보기 →</a></span></div>
-        <div class="opts ${x.vs.some(v => v.image) ? '' : 'txtonly'}">${x.vs.map(v => `
+        <div class="opt-label"><span><b class="ks-n">${i + 1}</b>${esc(x.label)} <a class="ks-more" href="#/p/${product(sel[i].product_id).id}">상품 보기 →</a></span></div>
+        ${x.ps.length > 1 ? `<div class="kit-prods">${x.ps.map(pp => `<button type="button" class="${pp.id === sel[i].product_id ? 'on' : ''}" data-kp="${i}" data-pid="${pp.id}"><img src="${thumb(pp.image)}" alt=""><span>${esc(pp.name)}</span></button>`).join('')}</div>` : ''}
+        <div class="opts ${x.vs.some(v => v.image) ? '' : 'txtonly'}">${x.vs.filter(v => v.product_id === sel[i].product_id).map(v => `
           <button class="opt ${v.image ? '' : 'txt'} ${v.stock ? '' : 'out'}" data-s="${i}" data-v="${v.id}">
             ${v.image ? `<img src="${thumb(v.image)}" alt="">` : ''}
             <span>${v.image ? esc(v.option_name) : optText(v.option_name)}${v.stock ? '' : '<span class="so">품절</span>'}${v.price > x.min ? `<span class="op">+${won(v.price - x.min)}원</span>` : ''}</span>
@@ -1071,18 +1077,23 @@ function viewKit(id) {
   </div>
   <section class="detail-sec">
     <div class="detail-h">구성품 상세정보</div>
-    ${I.slots.map((x, i) => `
-      <div class="kit-dh"><b><i class="ks-n">${i + 1}</i>${esc(x.p.name)}</b><a href="#/p/${x.p.id}">상품 페이지 →</a></div>
-      <div class="detail-imgs">${(x.p.detail_images || []).map(d => `<img src="${img(d)}" alt="" loading="lazy">`).join('') || `<img src="${img(x.p.image)}" alt="" loading="lazy">`}</div>`).join('')}
+    ${I.slots.map((x, i) => x.ps.map((pp, j) => `
+      <details class="kit-det">
+        <summary><b><i class="ks-n">${i + 1}</i>${esc(pp.name)}${x.ps.length > 1 ? ' <span class="mut">(택1)</span>' : ''}</b><span class="kd-tg">상세 정보 펼쳐보기</span></summary>
+        <div class="detail-imgs">${(pp.detail_images || []).map(d => `<img src="${img(d)}" alt="" loading="lazy">`).join('') || `<img src="${img(pp.image)}" alt="" loading="lazy">`}</div>
+        <a class="kd-more" href="#/p/${pp.id}">상품 페이지로 가기 →</a>
+      </details>`).join('')).join('')}
   </section>
   <div class="mbar show" id="mbar"><div class="mt" id="mtotal"></div><button class="btn" id="madd">담기</button><button class="btn pri" id="mbuy">바로 주문</button></div>`;
 
   const render = () => {
     S.kitSel[k.id] = sel.map(v => v.id);
+    (S.kitQty = S.kitQty || {})[k.id] = qty;
     $$('.opt').forEach(b => b.classList.toggle('on', sel[+b.dataset.s]?.id === +b.dataset.v));
+    $$('.kd-tg').forEach(t => t.textContent = t.closest('details').open ? '접기' : '상세 정보 펼쳐보기');
     const lst = sel.reduce((a, v) => a + v.price, 0), kp = kitPrice(lst, k), out = sel.some(v => !v.stock), hi = avail();
     $('#ksum').innerHTML = `
-      <div class="ks-list">${sel.map((v, i) => `<div><span>${esc(I.slots[i].label)} · <b>${esc(v.option_name)}</b></span><span class="num">${won(v.price)}원</span></div>`).join('')}</div>
+      <div class="ks-list">${sel.map((v, i) => `<div><span>${esc(I.slots[i].ps.length > 1 ? product(v.product_id).name : I.slots[i].label)} · <b>${esc(v.option_name)}</b></span><span class="num">${won(v.price)}원</span></div>`).join('')}</div>
       <div class="ks-foot">
         <div class="qty"><button data-kq="-1" aria-label="수량 감소">−</button><input id="kqty" value="${qty}" inputmode="numeric"><button data-kq="1" aria-label="수량 증가">+</button></div>
         <div class="ks-tot"><s>${won(lst * qty)}원</s><b>${won(kp * qty)}<small>원</small></b></div>
@@ -1102,7 +1113,14 @@ function viewKit(id) {
     qty = Math.max(1, Math.min(qty, avail() || 1));
     render();
   });
-  const commit = () => { addKitToCart(k.id, sel.map(v => v.id), qty); const n = qty; qty = 1; return n; };
+  // 택1 칸: 상품을 바꾸면 그 상품의 첫 옵션으로 바꾸고 다시 그림
+  $$('[data-kp]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.kp, pid = +b.dataset.pid, vs = I.slots[i].vs.filter(v => v.product_id === pid);
+    sel[i] = vs.find(v => v.stock) || vs[0];
+    S.kitSel[k.id] = sel.map(v => v.id);
+    const y = scrollY; viewKit(k.id); scrollTo(0, y);
+  });
+  const commit = () => { addKitToCart(k.id, sel.map(v => v.id), qty); const n = qty; qty = 1; S.kitQty[k.id] = 1; return n; };
   $('#add').onclick = $('#madd').onclick = () => { const n = commit(); toast(`패키지 ${n}세트를 장바구니에 담았습니다`); render(); };
   $('#buynow').onclick = $('#mbuy').onclick = () => { commit(); location.hash = '#/cart'; };
   // 사진: 스와이프 · 화살표 · 썸네일
@@ -1118,6 +1136,7 @@ function viewKit(id) {
   }, { passive: true });
   $$('.thumbs img').forEach(t => t.onclick = () => goSlide(+t.dataset.i));
   $$('.gnav').forEach(b => b.onclick = () => goSlide((cur + +b.dataset.g + pics.length) % pics.length));
+  $$('.kit-det').forEach(dt => dt.ontoggle = () => { $('.kd-tg', dt).textContent = dt.open ? '접기' : '상세 정보 펼쳐보기'; });
   render();
 }
 
