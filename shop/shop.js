@@ -176,7 +176,7 @@ function demoApi() {
         features: ['낱개로 사는 것보다 12% 더 할인', '무선충전 패드 · 컵홀더 · 암레스트 수납함 중 1종 선택', '출고 선물·인도 서비스용으로 추천'],
         slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }, { label: '센터콘솔 업그레이드 (1종 선택)', product_ids: [5, 11, 7] }],
         image: 'shop/img/kit/k2_main1.jpg', images: ['shop/img/kit/k2_main1.jpg'] }];
-      return { products: data || [], variants, settings, kits };
+      return { products: data || [], variants, settings, kits: [] };   // 패키지는 지금 숨김 (실제 사이트와 같게)
     },
     async stock() { return variants; },
     async placeOrderCard(a) {
@@ -220,7 +220,7 @@ function demoApi() {
       for (const it of o.order_items) { const v = variants.find(x => x.id === it.variant_id); if (v) v.stock += it.qty; }
       store('zk_demo_orders', orders);
     },
-    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [{ id: 0, image_url: 'img/banner/open_live_pc.jpg', image_mobile_url: 'img/banner/open_live_m.jpg', link: '#/products' }, { id: 1, image_url: 'img/banner/sample_door.jpg', link: '#/p/2' }, { id: 2, image_url: 'img/banner/sample_dealer.jpg', link: '#/products' }]; },
+    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [1, 2, 3].map(n => ({ id: n, image_url: `img/banner/dealer_d${n}_pc.jpg`, image_mobile_url: `img/banner/dealer_d${n}_m.jpg`, link: '#/products' })); },
     async notices() {
       const t = Date.now();
       return [
@@ -743,28 +743,75 @@ function viewShop() {
 }
 
 // ---------------------------------------------------------------- 홈
+// 홈: 네이버 스토어처럼 — 카테고리 줄 · 꽉 찬 배너 · 인기 아이템 · 색상별로 풀어 보여 주는 전체상품
+const CAT_GROUPS = [
+  ['출고 필수템', ['디스플레이']],
+  ['키 케이스', ['스마트키']],
+  ['수납·정리', ['센터 콘솔', '뒷좌석']],
+  ['편의·보호', ['도어', '시트']],
+];
+const groupOf = p => (CAT_GROUPS.find(([, cs]) => cs.includes(p.category)) || CAT_GROUPS[3])[0];
+// 인기 아이템 기본 순서 (네이버 스토어 '지커 7X 인기 아이템'과 같게): [상품번호, 대표 색]
+const POP_ORDER = [[1, 'HD 클리어'], [13, '실버'], [10, '화이트'], [5, '화이트'], [8, '퍼플'], [11, '오렌지'], [7, '패드 조합형'], [3, '투명 + 실버 키링'], [2, '블랙'], [12, '블랙']];
+const SORTS = [['rec', '추천순'], ['low', '낮은 가격순'], ['high', '높은 가격순'], ['new', '최신 등록순']];
+
+// 소비자가(권장가)가 딜러가보다 높으면 할인율 (네이버처럼 소비자가 취소선 + 할인율 + 딜러가)
+const offPct = v => v && v.retail_price > v.price ? Math.floor((v.retail_price - v.price) / v.retail_price * 100) : 0;
+
+// 색상(옵션) 하나 = 카드 하나. 누르면 상품 페이지에서 그 색이 골라진 채로 열림
+function variantCard(v) {
+  const p = product(v.product_id), st = statusOf(p);
+  const out = !v.stock, soon = out && st === 'soon';
+  return `
+  <a class="vcard ${out ? 'out' : ''}" href="#/p/${p.id}?v=${v.id}">
+    <div class="ph"><img src="${thumb(v.image || p.image)}" alt="" loading="lazy">${out ? `<span class="vtag">${soon ? esc(arrivalLabel(p)) : '품절'}</span>` : p.is_best ? '<span class="vtag best">BEST</span>' : ''}</div>
+    <div class="vn">${esc(p.name)}</div>
+    ${p.variants_n > 1 ? `<div class="vo">${esc(v.option_name)}</div>` : ''}
+    ${offPct(v) ? `<div class="vr"><s>${won(v.retail_price)}원</s></div>` : ''}
+    <div class="vp">${offPct(v) ? `<em>${offPct(v)}%</em>` : ''}${won(v.price)}<small>원</small></div>
+  </a>`;
+}
+
 function viewHome() {
   const sellable = S.products.filter(p => S.variants.some(v => v.product_id === p.id));
-  const cats = [...new Set(sellable.map(p => p.category).filter(Boolean))];
-  // 전체 상품: 입고 예정·품절은 뒤로, 그 안에서 BEST 먼저, 나머지는 관리자 순서
-  const ordered = [...sellable].sort((a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || (b.is_best ? 1 : 0) - (a.is_best ? 1 : 0) || (a.sort ?? 0) - (b.sort ?? 0));
-  const hc = cats.includes(S.homeCat) ? S.homeCat : '전체';
-  const shown = hc === '전체' ? ordered : ordered.filter(p => p.category === hc);
+  sellable.forEach(p => p.variants_n = S.variants.filter(v => v.product_id === p.id).length);
+  const groups = CAT_GROUPS.filter(([g]) => sellable.some(p => groupOf(p) === g)).map(([g]) => g);
+  const hc = groups.includes(S.homeCat) ? S.homeCat : '전체';
   const st = S.settings, tiers = tierText(st), cut = cutoffText(st.same_day_cutoff);
   const info = [st.free_shipping_over ? `<b>${won(st.free_shipping_over)}원 이상</b> 무료배송` : '', tiers ? `수량 할인 <b>${tiers}</b>` : '', cut ? `<b>${cut}</b> 입금 확인분 당일 출고` : ''].filter(Boolean);
   const bs = S.banners || [];
+  // 전체상품: 색상별 카드
+  const vlist = S.variants.filter(v => { const p = product(v.product_id); return p && sellable.includes(p) && (hc === '전체' || groupOf(p) === hc); });
+  const so = SORTS.some(([k]) => k === S.homeSort) ? S.homeSort : 'rec';
+  const rank = v => { const p = product(v.product_id); return [v.stock ? 0 : 1, p.is_best ? 0 : 1, p.sort ?? 0, v.sort ?? 0]; };
+  const cmp = (a, b) => { const x = rank(a), y = rank(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+  vlist.sort(so === 'low' ? (a, b) => (!a.stock - !b.stock) || a.price - b.price || cmp(a, b)
+    : so === 'high' ? (a, b) => (!a.stock - !b.stock) || b.price - a.price || cmp(a, b)
+    : so === 'new' ? (a, b) => (!a.stock - !b.stock) || String(product(b.product_id).created_at || '').localeCompare(String(product(a.product_id).created_at || '')) || cmp(a, b)
+    : cmp);
+  // 인기 아이템: 상품마다 대표 색 하나 · BEST 표시한 상품 먼저, 그다음 네이버 스토어 인기 순서 · 최대 10개
+  const pr = p => { const i = POP_ORDER.findIndex(([id]) => id === p.id); return i < 0 ? 99 : i; };
+  const pop = [...sellable].sort((a, b) => (b.is_best ? 1 : 0) - (a.is_best ? 1 : 0) || STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || pr(a) - pr(b) || (a.sort ?? 0) - (b.sort ?? 0))
+    .map(p => { const vs = S.variants.filter(v => v.product_id === p.id).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)); const want = (POP_ORDER.find(([id]) => id === p.id) || [])[1];
+      return vs.find(v => v.stock && v.option_name === want) || vs.find(v => v.stock) || null; })
+    .filter(Boolean).slice(0, 10);
   app().innerHTML = `
-  ${bs.length ? `<div class="hero">
+  <div class="catbar"><div class="catbar-in">${['전체', ...groups].map(g => `<button type="button" class="${g === hc ? 'on' : ''}" data-hcat="${esc(g)}">${g === '전체' ? 'ZEEKR 7X 전체' : esc(g)}</button>`).join('')}</div></div>
+  ${bs.length ? `<div class="hero wide">
     <div class="hero-track" id="hero">${bs.map(b => `<a class="hero-slide" ${b.link === '#/products' ? 'href="#/" data-toall' : b.link ? `href="${esc(b.link)}"` : ''}><picture>${b.image_mobile_url ? `<source media="(max-width:860px)" srcset="${esc(b.image_mobile_url)}">` : ''}<img src="${esc(b.image_url)}" alt="${esc(b.title || '')}"></picture></a>`).join('')}</div>
     ${bs.length > 1 ? `<button class="hero-nav prev" data-hn="-1" aria-label="이전 배너">‹</button><button class="hero-nav next" data-hn="1" aria-label="다음 배너">›</button>
     <div class="hero-dots">${bs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
   </div>` : ''}
-  ${info.length ? `<div class="home-info">${info.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
+  ${info.length ? `<div class="home-strip">${info.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
   ${kitsSection()}
-  <div class="sec-h big tagged all-h"><div><h2>전체 상품 <em>${sellable.length}</em></h2><p>지커 7X 전용 액세서리 · 옵션 여러 개를 함께 담을 수 있어요</p></div></div>
-  <div class="home-cats">${['전체', ...cats].map(c => `<button type="button" class="${c === hc ? 'on' : ''}" data-hcat="${esc(c)}">${esc(c)} ${c === '전체' ? sellable.length : sellable.filter(p => p.category === c).length}</button>`).join('')}</div>
-  <div class="grid home-grid">${shown.map(productCard).join('')}</div>`;
-  $$('[data-hcat]').forEach(b => b.onclick = () => { S.homeCat = b.dataset.hcat; const y = scrollY; viewHome(); scrollTo(0, y); });
+  ${hc === '전체' && pop.length ? `<section class="hsec"><h2 class="hs-t">지커 7X 인기 아이템</h2><div class="vgrid">${pop.map(variantCard).join('')}</div></section>` : ''}
+  <section class="hsec all-h"><h2 class="hs-t">${hc === '전체' ? '전체상품' : esc(hc)} <em>${vlist.length}</em></h2>
+    <div class="hs-sort">${SORTS.map(([k, l]) => `<button type="button" class="${k === so ? 'on' : ''}" data-hsort="${k}">${k === so ? '✓ ' : ''}${l}</button>`).join('')}</div>
+    <div class="vgrid">${vlist.map(variantCard).join('') || '<div class="empty">상품이 없습니다.</div>'}</div>
+  </section>`;
+  const keep = fn => () => { const y = scrollY; fn(); viewHome(); scrollTo(0, y); };
+  $$('[data-hcat]').forEach(b => b.onclick = () => { S.homeCat = b.dataset.hcat; viewHome(); $('.all-h')?.scrollIntoView({ block: 'start' }); if (S.homeCat === '전체') scrollTo(0, 0); });
+  $$('[data-hsort]').forEach(b => b.onclick = keep(() => { S.homeSort = b.dataset.hsort; }));
   // 배너 '전체 상품 목록' → 같은 화면의 상품 목록으로 부드럽게 이동
   $$('[data-toall]').forEach(a => a.onclick = e => { e.preventDefault(); $('.all-h')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   startHero();
@@ -850,7 +897,7 @@ function viewNotices() {
 }
 
 // ---------------------------------------------------------------- 상품 상세
-function viewProduct(id) {
+function viewProduct(id, preV) {
   const p = product(+id);
   if (!p) return viewShop();
   if (Date.now() - (store('zk_v_' + p.id) || 0) > 6e5) { store('zk_v_' + p.id, Date.now()); api.logView(p.id).catch(() => {}); }
@@ -880,7 +927,7 @@ function viewProduct(id) {
       <h1>${esc(p.name)}</h1>
       <p class="sub">${esc(p.subtitle || '')}</p>
       ${S.guest ? `<div class="price locked-pd"><span class="blur" aria-hidden="true">88,000원</span><small>회원 전용가 · 가입 승인 후 공개</small></div>`
-        : `<div class="price"><span>${won(min)}원${max > min ? '~' : ''}</span>${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>`}
+        : `<div class="price">${(() => { const mv = vs.find(v => v.price === min); return offPct(mv) ? `<em class="pd-off">${offPct(mv)}%</em>` : ''; })()}<span>${won(min)}원${max > min ? '~' : ''}</span>${(() => { const mv = vs.find(v => v.price === min); return offPct(mv) ? `<s class="pd-rs">${won(mv.retail_price)}원</s>` : ''; })()}${p.unit_note ? `<em class="unit">${esc(p.unit_note)}</em>` : ''}</div>`}
       ${status === 'now' && p.arrival ? `<div class="arrive-line"><b>${esc(arrivalLabel(p))}</b> · 지금 주문하시면 입고 후 순차 발송돼요</div>`
         : status === 'soon' ? `<div class="arrive-line"><b>${esc(arrivalLabel(p))}</b> · 입고되면 주문할 수 있어요</div>` : status === 'out' ? '<div class="arrive-line out"><b>품절</b> · 재입고 일정은 문의해 주세요</div>' : ''}
       <div class="opt-label"><span>${!canBuy ? '옵션' : '옵션 선택 <span class="mut" style="font-weight:400">· 여러 개 고를 수 있어요</span>'}</span></div>
@@ -989,7 +1036,10 @@ function viewProduct(id) {
   $('#add').onclick = $('#madd').onclick = () => { const n = commit(); toast(`${n}개를 장바구니에 담았습니다`); render(); };
   $('#buynow').onclick = () => { commit(); location.hash = '#/cart'; };
   $('#mbuy').onclick = () => { if (!picks.length) return $('.opts').scrollIntoView({ behavior: 'smooth', block: 'center' }); commit(); location.hash = '#/cart'; };
-  if (vs.length === 1 && vs[0].stock) pick(vs[0]);   // 옵션이 하나뿐이면 바로 선택
+  const pv = preV && vs.find(v => v.id === +preV);
+  if (pv && pv.stock) pick(pv);                        // 홈에서 누른 색상을 미리 선택
+  else if (pv && pv.image) goSlide(pics.indexOf(pv.image), false);
+  else if (vs.length === 1 && vs[0].stock) pick(vs[0]);   // 옵션이 하나뿐이면 바로 선택
   render();
 }
 
@@ -1799,7 +1849,7 @@ async function route() {
   const full = location.hash.replace(/^#/, '') || '/';
   const [h, qs] = full.split('?');
   try {
-    if (h.startsWith('/p/')) viewProduct(h.slice(3));
+    if (h.startsWith('/p/')) viewProduct(h.slice(3), new URLSearchParams(qs || '').get('v'));
     else if (h.startsWith('/kit/')) viewKit(h.slice(5));
     else if (h === '/products') viewHome();
     else if (h === '/cart') viewCart();
@@ -1860,6 +1910,9 @@ async function boot() {
   }
 }
 
+// 화면 가로 폭(스크롤바 제외) → 홈 배너·카테고리 줄을 화면 끝까지 꽉 채울 때 사용
+const setVW = () => document.documentElement.style.setProperty('--vw', document.documentElement.clientWidth + 'px');
+setVW(); window.addEventListener('resize', setVW); new ResizeObserver(setVW).observe(document.body);
 window.addEventListener('hashchange', route);
 if (!DEMO) sb.auth.onAuthStateChange(ev => {
   if (ev === 'PASSWORD_RECOVERY') { RECOVERY = true; setTimeout(boot, 0); }
