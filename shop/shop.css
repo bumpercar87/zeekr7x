@@ -905,7 +905,7 @@ body{overflow-x:clip}
 .catbar-in::-webkit-scrollbar{display:none}
 .catbar button{flex:none;border:0;background:none;font:inherit;font-size:15px;font-weight:600;color:#55524c;padding:15px 0 13px;border-bottom:2px solid transparent;cursor:pointer}
 .catbar button.on{color:var(--ink);border-bottom-color:var(--ink)}
-.hero.wide{width:var(--vw,100vw);margin:0 0 0 calc(50% - var(--vw,100vw) / 2);aspect-ratio:auto;height:max(260px,20.834vw);max-height:400px}
+.hero.wide{width:100%;margin:28px 0 0;aspect-ratio:1020/400;height:auto;max-height:none}   /* 상품 목록과 같은 폭으로 끊음 */
 .home-strip{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 26px;font-size:14px;color:#55524c;padding:13px 0;border-bottom:1px solid var(--hair);width:var(--vw,100vw);margin-left:calc(50% - var(--vw,100vw) / 2);background:#fff}
 .home-strip b{color:var(--ink)}
 .hsec{margin-top:52px}
@@ -930,7 +930,7 @@ body{overflow-x:clip}
 @media (max-width:860px){
   .catbar-in{gap:22px;padding:0 16px}
   .catbar button{font-size:14.5px;padding:13px 0 11px}
-  .hero.wide{height:auto;aspect-ratio:5/4;max-height:none;margin-top:0}
+  .hero.wide{width:auto;margin:0 -16px;aspect-ratio:5/4}
   .home-strip{font-size:12.5px;gap:4px 14px;padding:10px 16px}
   .hsec{margin-top:36px}
   .hs-t{font-size:20px;margin-bottom:16px}
@@ -945,3 +945,4 @@ body{overflow-x:clip}
 .vp em{font-style:normal;color:#e5262b;margin-right:6px}
 .pd-rs{font-family:"Pretendard Variable",Pretendard,sans-serif;font-size:15px;font-weight:500;color:var(--dim)}
 .pd-off{font-style:normal;color:#e5262b;font-weight:800;margin-right:8px;font-size:inherit}
+.hero.wide{clip-path:inset(0 1px 0 0)}   /* 소수점 위치 때문에 다음 배너가 1px 비치는 것 가림 */

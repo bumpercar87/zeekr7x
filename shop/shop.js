@@ -220,7 +220,7 @@ function demoApi() {
       for (const it of o.order_items) { const v = variants.find(x => x.id === it.variant_id); if (v) v.stock += it.qty; }
       store('zk_demo_orders', orders);
     },
-    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [1, 2, 3].map(n => ({ id: n, image_url: `img/banner/dealer_d${n}_pc.jpg`, image_mobile_url: `img/banner/dealer_d${n}_m.jpg`, link: '#/products' })); },
+    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [1, 2].map(n => ({ id: n, image_url: `img/banner/dealer_d${n}_pc2.jpg`, image_mobile_url: `img/banner/dealer_d${n}_m2.jpg`, link: '#/products' })); },
     async notices() {
       const t = Date.now();
       return [
