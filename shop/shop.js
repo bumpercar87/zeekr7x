@@ -177,8 +177,8 @@ function demoApi() {
         slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }, { label: '센터콘솔 업그레이드 (1종 선택)', product_ids: [5, 11, 7] }],
         image: 'shop/img/kit/k2_main1.jpg', images: ['shop/img/kit/k2_main1.jpg'] }];
       // 실제 사이트와 같게: 1·2번은 숨김, 3번 디스플레이 3종 패키지만 판매 (supabase/49_kit_display.sql)
-      const kit3 = { id: 3, name: '디스플레이 3종 패키지', subtitle: '강화유리 필름 · 실리콘 커버 · 맥세이프 거치대', discount_rate: 10,
-        features: ['낱개로 사는 것보다 10% 할인', '칸마다 색상·옵션을 골라 한 번에 담기', '출고 선물·인도 서비스용으로 추천'],
+      const kit3 = { id: 3, name: '디스플레이 3종 패키지', subtitle: '강화유리 필름 · 실리콘 커버 · 맥세이프 거치대', discount_rate: 5,
+        features: ['낱개로 사는 것보다 5% 할인', '칸마다 색상·옵션을 골라 한 번에 담기', '출고 선물·인도 서비스용으로 추천'],
         slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: '디스플레이 실리콘 커버', product_id: 6 }, { label: '디스플레이 맥세이프 거치대', product_id: 13 }],
         image: 'shop/img/kit/k3_main1.jpg', images: ['shop/img/kit/k3_main1.jpg'], pop_before: 1,
         intro_title: '맥세이프 거치대, 커버와 이렇게 같이 써요', intro_images: ['shop/img/p13/detail_04.jpg', 'shop/img/p13/detail_05.jpg', 'shop/img/p13/detail_06.jpg'] };
