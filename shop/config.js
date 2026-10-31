@@ -8,6 +8,6 @@ window.SHEET_URL = 'https://docs.google.com/spreadsheets/d/19crq_-szVqdJRlVK12RK
 window.KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_vtvxiX/chat';
 
 // 상품 사진 버전 (사진을 교체하면 숫자를 올려 주세요)
-window.ASSET_V = '10312800';
+window.ASSET_V = '10312900';
 // 토스페이먼츠 클라이언트 키 (공개용 · test_ck_… 또는 live_ck_…). 비어 있으면 카드결제 숨김. 시크릿 키는 절대 여기 넣지 말 것 → Supabase Edge Function Secrets
 window.TOSS_CLIENT_KEY = '';
