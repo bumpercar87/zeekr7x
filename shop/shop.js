@@ -176,7 +176,13 @@ function demoApi() {
         features: ['낱개로 사는 것보다 12% 더 할인', '무선충전 패드 · 컵홀더 · 암레스트 수납함 중 1종 선택', '출고 선물·인도 서비스용으로 추천'],
         slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: 'TPU 스마트키 케이스', product_id: 3 }, { label: kp === 13 ? '디스플레이 맥세이프 거치대' : '도어 버튼 스티커', product_id: kp }, { label: '센터콘솔 업그레이드 (1종 선택)', product_ids: [5, 11, 7] }],
         image: 'shop/img/kit/k2_main1.jpg', images: ['shop/img/kit/k2_main1.jpg'] }];
-      return { products: data || [], variants, settings, kits: [] };   // 패키지는 지금 숨김 (실제 사이트와 같게)
+      // 실제 사이트와 같게: 1·2번은 숨김, 3번 디스플레이 3종 패키지만 판매 (supabase/49_kit_display.sql)
+      const kit3 = { id: 3, name: '디스플레이 3종 패키지', subtitle: '강화유리 필름 · 실리콘 커버 · 맥세이프 거치대', discount_rate: 10,
+        features: ['낱개로 사는 것보다 10% 할인', '칸마다 색상·옵션을 골라 한 번에 담기', '출고 선물·인도 서비스용으로 추천'],
+        slots: [{ label: '강화유리 보호필름', product_id: 1 }, { label: '디스플레이 실리콘 커버', product_id: 6 }, { label: '디스플레이 맥세이프 거치대', product_id: 13 }],
+        image: 'shop/img/kit/k3_main1.jpg', images: ['shop/img/kit/k3_main1.jpg'], pop_before: 1,
+        intro_title: '맥세이프 거치대, 커버와 이렇게 같이 써요', intro_images: ['shop/img/p13/detail_04.jpg', 'shop/img/p13/detail_05.jpg', 'shop/img/p13/detail_06.jpg'] };
+      return { products: data || [], variants, settings, kits: [kit3] };
     },
     async stock() { return variants; },
     async placeOrderCard(a) {
@@ -220,7 +226,7 @@ function demoApi() {
       for (const it of o.order_items) { const v = variants.find(x => x.id === it.variant_id); if (v) v.stock += it.qty; }
       store('zk_demo_orders', orders);
     },
-    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [1, 2].map(n => ({ id: n, image_url: `img/banner/dealer_d${n}_pc2.jpg`, image_mobile_url: `img/banner/dealer_d${n}_m2.jpg`, link: '#/products' })); },
+    async banners() { return (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).concat([]).length ? (store('zk_demo_banners') || []).filter(b => b.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)) : [1, 2, 4].map(n => ({ id: n, image_url: `img/banner/dealer_d${n}_pc2.jpg`, image_mobile_url: `img/banner/dealer_d${n}_m2.jpg`, link: n === 4 ? '#/kit/3' : '#/products' })); },
     async notices() {
       const t = Date.now();
       return [
@@ -789,12 +795,15 @@ function viewHome() {
     : so === 'high' ? (a, b) => (!a.stock - !b.stock) || b.price - a.price || cmp(a, b)
     : so === 'new' ? (a, b) => (!a.stock - !b.stock) || String(product(b.product_id).created_at || '').localeCompare(String(product(a.product_id).created_at || '')) || cmp(a, b)
     : cmp);
-  // 인기 아이템: 상품마다 대표 색 하나 · BEST 표시한 상품 먼저, 그다음 네이버 스토어 인기 순서 · 최대 10개
+  // 인기 아이템: 상품마다 대표 색 하나 · BEST 표시한 상품 먼저, 그다음 네이버 스토어 인기 순서 · 최대 10개 (패키지 카드 포함)
+  const popKits = S.guest ? [] : (S.kits || []).filter(k => k.pop_before && kitInfo(k).ok);
   const pr = p => { const i = POP_ORDER.findIndex(([id]) => id === p.id); return i < 0 ? 99 : i; };
   const pop = [...sellable].sort((a, b) => (b.is_best ? 1 : 0) - (a.is_best ? 1 : 0) || STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || pr(a) - pr(b) || (a.sort ?? 0) - (b.sort ?? 0))
     .map(p => { const vs = S.variants.filter(v => v.product_id === p.id).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)); const want = (POP_ORDER.find(([id]) => id === p.id) || [])[1];
       return vs.find(v => v.stock && v.option_name === want) || vs.find(v => v.stock) || null; })
-    .filter(Boolean).slice(0, 10);
+    .filter(Boolean).slice(0, 10 - popKits.length);
+  // 패키지는 지정한 상품(pop_before) 카드 바로 앞에
+  const popHtml = pop.map(v => popKits.filter(k => k.pop_before === v.product_id).map(kitCard).join('') + variantCard(v)).join('');
   app().innerHTML = `
   <div class="catbar"><div class="catbar-in">${['전체', ...groups].map(g => `<button type="button" class="${g === hc ? 'on' : ''}" data-hcat="${esc(g)}">${g === '전체' ? 'ZEEKR 7X 전체' : esc(g)}</button>`).join('')}</div></div>
   ${bs.length ? `<div class="hero wide">
@@ -804,7 +813,7 @@ function viewHome() {
   </div>` : ''}
   ${info.length ? `<div class="home-strip">${info.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
   ${kitsSection()}
-  ${hc === '전체' && pop.length ? `<section class="hsec"><h2 class="hs-t">지커 7X 인기 아이템</h2><div class="vgrid">${pop.map(variantCard).join('')}</div></section>` : ''}
+  ${hc === '전체' && pop.length ? `<section class="hsec"><h2 class="hs-t">지커 7X 인기 아이템</h2><div class="vgrid">${popHtml}</div></section>` : ''}
   <section class="hsec all-h"><h2 class="hs-t">${hc === '전체' ? '전체상품' : esc(hc)} <em>${vlist.length}</em></h2>
     <div class="hs-sort">${SORTS.map(([k, l]) => `<button type="button" class="${k === so ? 'on' : ''}" data-hsort="${k}">${k === so ? '✓ ' : ''}${l}</button>`).join('')}</div>
     <div class="vgrid">${vlist.map(variantCard).join('') || '<div class="empty">상품이 없습니다.</div>'}</div>
@@ -1057,9 +1066,22 @@ function kitInfo(k) {
   return { slots, ok, minSum, maxSum, inStock };
 }
 
+// 인기 아이템 줄에 끼우는 패키지 카드 (상품 카드와 같은 모양)
+function kitCard(k) {
+  const I = kitInfo(k);
+  return `
+  <a class="vcard ${I.inStock ? '' : 'out'}" href="#/kit/${k.id}">
+    <div class="ph"><img src="${thumb(k.image)}" alt="" loading="lazy">${I.inStock ? '<span class="vtag kit">패키지</span>' : '<span class="vtag">품절</span>'}</div>
+    <div class="vn">${esc(k.name)}</div>
+    <div class="vo">${k.slots.length}종 구성</div>
+    <div class="vr"><s>${won(I.minSum)}원</s></div>
+    <div class="vp"><em>${k.discount_rate}%</em>${won(kitPrice(I.minSum, k))}<small>원${I.maxSum > I.minSum ? '~' : ''}</small></div>
+  </a>`;
+}
+
 function kitsSection() {
   if (S.guest || !(S.kits || []).length) return '';
-  const cards = S.kits.map(k => {
+  const cards = S.kits.filter(k => !k.pop_before).map(k => {
     const I = kitInfo(k);
     if (!I.ok) return '';
     return `
@@ -1125,6 +1147,10 @@ function viewKit(id) {
       ${S.settings.ship_info ? `<div class="shipinfo"><b>배송 · 교환 안내</b><div>${esc(S.settings.ship_info)}</div></div>` : ''}
     </div>
   </div>
+  ${(k.intro_images || []).length ? `<section class="detail-sec kit-intro">
+    <div class="detail-h">${esc(k.intro_title || '이렇게 같이 써요')}</div>
+    <div class="detail-imgs">${k.intro_images.map(d => `<img src="${img(d)}" alt="" loading="lazy">`).join('')}</div>
+  </section>` : ''}
   <section class="detail-sec">
     <div class="detail-h">구성품 상세정보</div>
     ${I.slots.map((x, i) => x.ps.map((pp, j) => `
