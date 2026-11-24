@@ -764,10 +764,22 @@ const SORTS = [['rec', '추천순'], ['low', '낮은 가격순'], ['high', '높�
 // 소비자가(권장가)가 딜러가보다 높으면 할인율 (네이버처럼 소비자가 취소선 + 할인율 + 딜러가)
 const offPct = v => v && v.retail_price > v.price ? Math.floor((v.retail_price - v.price) / v.retail_price * 100) : 0;
 
+// 옵션이 색상이 아닌 상품(마감·구성 조합)은 카드 하나로만 보이고, 상품 페이지에서 고름 (14 블랙 엠블럼)
+const ONE_CARD = new Set([14]);
+const oneCardPick = vs => { const by = (a, b) => (!a.stock - !b.stock) || (a.sort ?? 0) - (b.sort ?? 0); return [...vs].sort(by)[0]; };
 // 색상(옵션) 하나 = 카드 하나. 누르면 상품 페이지에서 그 색이 골라진 채로 열림
 function variantCard(v) {
-  const p = product(v.product_id), st = statusOf(p);
-  const out = !v.stock, soon = out && st === 'soon';
+  const p = product(v.product_id), st = statusOf(p), one = ONE_CARD.has(p.id);
+  const all = one ? S.variants.filter(x => x.product_id === p.id) : [v];
+  const out = one ? !all.some(x => x.stock) : !v.stock, soon = out && st === 'soon';
+  if (one) { const live = all.filter(x => x.stock), base = live.length ? live : all, lo = base.reduce((a, b) => (b.price < a.price ? b : a));
+    return `
+  <a class="vcard ${out ? 'out' : ''}" href="#/p/${p.id}">
+    <div class="ph"><img src="${thumb(p.image)}" alt="" loading="lazy">${out ? `<span class="vtag">${soon ? esc(arrivalLabel(p)) : '품절'}</span>` : p.is_best ? '<span class="vtag best">BEST</span>' : ''}</div>
+    <div class="vn">${esc(p.name)}</div>
+    <div class="vo">옵션 ${all.length}개 중 선택</div>
+    <div class="vp">${won(lo.price)}<small>원~</small></div>
+  </a>`; }
   return `
   <a class="vcard ${out ? 'out' : ''}" href="#/p/${p.id}?v=${v.id}">
     <div class="ph"><img src="${thumb(v.image || p.image)}" alt="" loading="lazy">${out ? `<span class="vtag">${soon ? esc(arrivalLabel(p)) : '품절'}</span>` : p.is_best ? '<span class="vtag best">BEST</span>' : ''}</div>
@@ -788,6 +800,7 @@ function viewHome() {
   const bs = S.banners || [];
   // 전체상품: 색상별 카드
   const vlist = S.variants.filter(v => { const p = product(v.product_id); return p && sellable.includes(p) && (hc === '전체' || groupOf(p) === hc); });
+  ONE_CARD.forEach(id => { const mine = vlist.filter(v => v.product_id === id); if (mine.length > 1) { const keep = oneCardPick(mine); for (let i = vlist.length - 1; i >= 0; i--) if (vlist[i].product_id === id && vlist[i] !== keep) vlist.splice(i, 1); } });
   const so = SORTS.some(([k]) => k === S.homeSort) ? S.homeSort : 'rec';
   const rank = v => { const p = product(v.product_id); return [v.stock ? 0 : 1, p.is_best ? 0 : 1, p.sort ?? 0, v.sort ?? 0]; };
   const cmp = (a, b) => { const x = rank(a), y = rank(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
