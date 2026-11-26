@@ -767,6 +767,7 @@ const offPct = v => v && v.retail_price > v.price ? Math.floor((v.retail_price -
 // 옵션이 색상이 아닌 상품(마감·구성 조합)은 카드 하나로만 보이고, 상품 페이지에서 고름 (14 블랙 엠블럼)
 const ONE_CARD = new Set([14]);
 const oneCardPick = vs => { const by = (a, b) => (!a.stock - !b.stock) || (a.sort ?? 0) - (b.sort ?? 0); return [...vs].sort(by)[0]; };
+const GUEST_VP = '<div class="vp vlock"><span class="blur" aria-hidden="true">00,000원</span><small>회원 전용가</small></div>';
 // 색상(옵션) 하나 = 카드 하나. 누르면 상품 페이지에서 그 색이 골라진 채로 열림
 function variantCard(v) {
   const p = product(v.product_id), st = statusOf(p), one = ONE_CARD.has(p.id);
@@ -778,15 +779,15 @@ function variantCard(v) {
     <div class="ph"><img src="${thumb(p.image)}" alt="" loading="lazy">${out ? `<span class="vtag">${soon ? esc(arrivalLabel(p)) : '품절'}</span>` : p.is_best ? '<span class="vtag best">BEST</span>' : ''}</div>
     <div class="vn">${esc(p.name)}</div>
     <div class="vo">옵션 ${all.length}개 중 선택</div>
-    <div class="vp">${won(lo.price)}<small>원~</small></div>
+    ${S.guest ? GUEST_VP : `<div class="vp">${won(lo.price)}<small>원~</small></div>`}
   </a>`; }
   return `
   <a class="vcard ${out ? 'out' : ''}" href="#/p/${p.id}?v=${v.id}">
     <div class="ph"><img src="${thumb(v.image || p.image)}" alt="" loading="lazy">${out ? `<span class="vtag">${soon ? esc(arrivalLabel(p)) : '품절'}</span>` : p.is_best ? '<span class="vtag best">BEST</span>' : ''}</div>
     <div class="vn">${esc(p.name)}</div>
     ${p.variants_n > 1 ? `<div class="vo">${esc(v.option_name)}</div>` : ''}
-    ${offPct(v) ? `<div class="vr"><s>${won(v.retail_price)}원</s></div>` : ''}
-    <div class="vp">${offPct(v) ? `<em>${offPct(v)}%</em>` : ''}${won(v.price)}<small>원</small></div>
+    ${S.guest ? GUEST_VP : `${offPct(v) ? `<div class="vr"><s>${won(v.retail_price)}원</s></div>` : ''}
+    <div class="vp">${offPct(v) ? `<em>${offPct(v)}%</em>` : ''}${won(v.price)}<small>원</small></div>`}
   </a>`;
 }
 
@@ -825,10 +826,11 @@ function viewHome() {
     <div class="hero-dots">${bs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
   </div>` : ''}
   ${info.length ? `<div class="home-strip">${info.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
+  ${S.guest ? `<div style="margin-top:22px">${GUEST_BAR}</div>` : ''}
   ${kitsSection()}
   ${hc === '전체' && pop.length ? `<section class="hsec"><h2 class="hs-t">지커 7X 인기 아이템</h2><div class="vgrid">${popHtml}</div></section>` : ''}
   <section class="hsec all-h"><h2 class="hs-t">${hc === '전체' ? '전체상품' : esc(hc)} <em>${vlist.length}</em></h2>
-    <div class="hs-sort">${SORTS.map(([k, l]) => `<button type="button" class="${k === so ? 'on' : ''}" data-hsort="${k}">${k === so ? '✓ ' : ''}${l}</button>`).join('')}</div>
+    <div class="hs-sort">${SORTS.filter(([k]) => !S.guest || k === 'rec' || k === 'new').map(([k, l]) => `<button type="button" class="${k === so ? 'on' : ''}" data-hsort="${k}">${k === so ? '✓ ' : ''}${l}</button>`).join('')}</div>
     <div class="vgrid">${vlist.map(variantCard).join('') || '<div class="empty">상품이 없습니다.</div>'}</div>
   </section>`;
   const keep = fn => () => { const y = scrollY; fn(); viewHome(); scrollTo(0, y); };
@@ -1911,12 +1913,17 @@ async function guestRoute() {
   if (!GUEST_OK(h)) { S.guest = false; renderNav(); return viewAuth(h === '/signup' ? 'signup' : 'login'); }
   if (!S.guest) {
     app().innerHTML = `<div class="loading">불러오는 중…</div>`;
-    try { Object.assign(S, await api.publicCatalog(), { settings: {}, guest: true }); }
+    try {
+      const [c, b] = await Promise.all([api.publicCatalog(), api.banners().catch(() => [])]);
+      c.variants.forEach(v => { if (v.stock == null) v.stock = v.in_stock ? 1 : 0; });   // 비회원은 재고 수량 대신 있음/없음만
+      Object.assign(S, c, { settings: {}, guest: true, banners: b, kits: [] });
+    }
     catch (e) { return viewAuth('login'); }
   }
   renderNav();
   window.scrollTo(0, 0);
-  h === '/products' ? viewShop() : viewProduct(h.slice(3));
+  if (h === '/products') return viewHome();
+  viewProduct(h.slice(3), new URLSearchParams((location.hash.split('?')[1]) || '').get('v'));
 }
 
 async function boot() {
